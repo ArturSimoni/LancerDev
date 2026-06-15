@@ -96,3 +96,25 @@ WHERE p.title = 'Portal de portfólio profissional'
   );
 
 COMMIT;
+
+-- Table to store GitHub projects added by freelancers to their profile
+BEGIN;
+CREATE TABLE IF NOT EXISTS github_projects (
+  id SERIAL PRIMARY KEY,
+  freelancer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  repo_url TEXT NOT NULL,
+  title TEXT,
+  description TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Example entry for seeded freelancer (pedro@dev.com)
+INSERT INTO github_projects (freelancer_id, repo_url, title, description)
+SELECT u.id, 'https://github.com/pedro-dev/portfolio', 'Portfolio Example', 'Repositório de exemplo do Pedro Dev'
+FROM users u
+WHERE u.email = 'pedro@dev.com'
+  AND NOT EXISTS (
+    SELECT 1 FROM github_projects gp JOIN users uu ON gp.freelancer_id = uu.id WHERE uu.email = 'pedro@dev.com' AND gp.repo_url = 'https://github.com/pedro-dev/portfolio'
+  );
+
+COMMIT;
