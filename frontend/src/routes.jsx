@@ -1,41 +1,46 @@
-import { createBrowserRouter } from 'react-router-dom';
-import MainLayout from './components/MainLayout';
-import Home from './pages/Home';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Cadastro from './pages/Cadastro';
-import CriarProjeto from './pages/CriarProjeto';
-import MeusAnuncios from './pages/MeusAnuncios';
+import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
+import Navbar from "./components/Navbar";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Cadastro from "./pages/Cadastro";
+import Dashboard from "./pages/Dashboard";
+import CriarProjeto from "./pages/CriarProjeto";
+import MeusAnuncios from "./pages/MeusAnuncios";
+import BuscarProjetos from "./pages/BuscarProjetos";
+import MinhasPropostas from "./pages/MinhasPropostas";
+import GerenciarPropostas from "./pages/GerenciarPropostas";
+import Chat from "./pages/Chat";
+
+const ProtectedRoute = ({ children, isPrivate }) => {
+  const token = localStorage.getItem('@LancerDev:token');
+  if (isPrivate && !token) return <Navigate to="/login" replace />;
+  if (!isPrivate && token) return <Navigate to="/dashboard" replace />;
+  return children;
+};
+
+const Layout = () => (
+  <>
+    <Navbar />
+    <main><Outlet /></main>
+  </>
+);
 
 export const router = createBrowserRouter([
   {
-    path: '/',
-    element: <MainLayout />,
+    path: "/",
+    element: <Layout />,
     children: [
-      {
-        path: '/',
-        element: <Home />,
-      },
-      {
-        path: '/login',
-        element: <Login />,
-      },
-      {
-        path: '/cadastro',
-        element: <Cadastro />,
-      },
-      {
-        path: '/dashboard',
-        element: <Dashboard />,
-      },
-      {
-        path: '/criar-projeto',
-        element: <CriarProjeto />,
-      },
-      {
-        path: '/meus-anuncios',
-        element: <MeusAnuncios />,
-      },
+      { index: true, element: <Home /> },
+      { path: "login", element: <ProtectedRoute isPrivate={false}><Login /></ProtectedRoute> },
+      { path: "cadastro", element: <ProtectedRoute isPrivate={false}><Cadastro /></ProtectedRoute> },
+      { path: "dashboard", element: <ProtectedRoute isPrivate={true}><Dashboard /></ProtectedRoute> },
+      { path: "criar-projeto", element: <ProtectedRoute isPrivate={true}><CriarProjeto /></ProtectedRoute> },
+      { path: "meus-anuncios", element: <ProtectedRoute isPrivate={true}><MeusAnuncios /></ProtectedRoute> },
+      { path: "projetos/:projectId/propostas", element: <ProtectedRoute isPrivate={true}><GerenciarPropostas /></ProtectedRoute> },
+      { path: "projetos", element: <ProtectedRoute isPrivate={true}><BuscarProjetos /></ProtectedRoute> },
+      { path: "propostas", element: <ProtectedRoute isPrivate={true}><MinhasPropostas /></ProtectedRoute> },
+      { path: "chat", element: <ProtectedRoute isPrivate={true}><Chat /></ProtectedRoute> },
+      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
 ]);

@@ -60,11 +60,10 @@ export default function Home() {
                                     <span style={styles.clientName}>Por: {project.client?.name}</span>
                                     <button
                                         onClick={() => {
-                                            
                                             const token = localStorage.getItem('@LancerDev:token');
 
                                             if (token) {
-                                                navigate('/dashboard');
+                                                navigate(`/projetos/${project.id}`);
                                             } else {
                                                 navigate('/login');
                                             }
