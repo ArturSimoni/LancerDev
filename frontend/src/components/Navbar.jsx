@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 export default function Navbar() {
   const navigate = useNavigate();
   
-  // Pegamos a role atualizada do localStorage
   const role = localStorage.getItem('@LancerDev:role');
   const user = localStorage.getItem('@LancerDev:user') ? JSON.parse(localStorage.getItem('@LancerDev:user')) : null;
 
@@ -17,7 +16,7 @@ export default function Navbar() {
       <div style={styles.container}>
         {/* Logo */}
         <Link to="/" style={styles.logo}>
-          Lancer<span style={{ color: 'var(--color-primary)' }}>Dev</span>
+          Lancer<span style={{ color: '#ff6b00' }}>Dev</span>
         </Link>
 
         {/* Links de Navegação */}
@@ -38,7 +37,8 @@ export default function Navbar() {
             <>
               <Link to="/dashboard" style={styles.link}>Painel Cliente</Link>
               <Link to="/criar-projeto" style={styles.link}>Publicar Vaga</Link>
-              <Link to="/meus-projetos" style={styles.link}>Meus Anúncios</Link>
+              {/* 💡 CORRIGIDO: de /meus-projetos para /meus-anuncios para bater com seu router */}
+              <Link to="/meus-anuncios" style={styles.link}>Meus Anúncios</Link>
             </>
           )}
         </nav>
@@ -64,8 +64,8 @@ export default function Navbar() {
 
 const styles = {
   header: {
-    backgroundColor: 'var(--color-surface)',
-    borderBottom: '2px solid var(--color-primary)',
+    backgroundColor: '#1e1e1e',
+    borderBottom: '2px solid #ff6b00',
     padding: '15px 0',
     position: 'sticky',
     top: 0,
@@ -106,7 +106,7 @@ const styles = {
     fontWeight: '500',
   },
   registerBtn: {
-    backgroundColor: 'var(--color-primary)',
+    backgroundColor: '#ff6b00',
     color: '#fff',
     padding: '8px 16px',
     borderRadius: '4px',
@@ -119,7 +119,7 @@ const styles = {
     alignItems: 'center',
   },
   username: {
-    color: 'var(--color-text-muted)',
+    color: '#aaa',
     fontSize: '14px',
   },
   logoutBtn: {

@@ -16,25 +16,14 @@ export default function Login() {
     setLoading(true);
 
     try {
-      // Altere a rota '/auth/login' para o endpoint exato da sua API Express
       const response = await api.post('/auth/login', { email, password });
-      
-      const { token, user } = response.data; // Supondo que seu back retorne { token, user: { role, name } }
+      const { token, user } = response.data;
 
-      // Salva os dados essenciais no navegador
       localStorage.setItem('@LancerDev:token', token);
       localStorage.setItem('@LancerDev:role', user.role);
       localStorage.setItem('@LancerDev:user', JSON.stringify(user));
 
-      // Redirecionamento estratégico baseado na Role
-      if (user.role === 'freelancer') {
-        navigate('/dashboard'); // Ou /dashboard/freelancer se preferir separar depois
-      } else if (user.role === 'client') {
-        navigate('/dashboard'); // Ou /dashboard/client
-      } else {
-        navigate('/');
-      }
-
+      navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Erro ao realizar login. Tente novamente.');
     } finally {
@@ -43,38 +32,108 @@ export default function Login() {
   }
 
   return (
-    <div style={{ padding: '40px', maxWidth: '400px', margin: '0 auto' }}>
-      <h1>Acessar LancerDev</h1>
+    <div style={styles.card}>
+      <h2 style={styles.title}>Acessar LancerDev</h2>
+      <p style={styles.subtitle}>Entre para gerenciar seus projetos e propostas</p>
       
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <div style={styles.errorBox}>{error}</div>}
 
       <form onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block' }}>E-mail:</label>
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>E-mail:</label>
           <input 
             type="email" 
             value={email} 
             onChange={(e) => setEmail(e.target.value)} 
             required 
-            style={{ width: '100%', padding: '8px' }}
+            style={styles.input}
+            placeholder="seu@email.com"
           />
         </div>
 
-        <div style={{ marginBottom: '15px' }}>
-          <label style={{ display: 'block' }}>Senha:</label>
+        <div style={styles.inputGroup}>
+          <label style={styles.label}>Senha:</label>
           <input 
             type="password" 
             value={password} 
             onChange={(e) => setPassword(e.target.value)} 
             required 
-            style={{ width: '100%', padding: '8px' }}
+            style={styles.input}
+            placeholder="Sua senha secreta"
           />
         </div>
 
-        <button type="submit" disabled={loading} style={{ padding: '10px 20px', cursor: 'pointer' }}>
-          {loading ? 'Entrando...' : 'Entrar'}
+        <button type="submit" disabled={loading} style={styles.submitBtn}>
+          {loading ? 'Autenticando...' : 'Entrar'}
         </button>
       </form>
     </div>
   );
 }
+
+const styles = {
+  card: {
+    backgroundColor: '#1e1e1e',
+    maxWidth: '450px',
+    margin: '80px auto',
+    padding: '40px 30px',
+    borderRadius: '8px',
+    border: '1px solid #222',
+    color: '#fff',
+  },
+  title: { 
+    fontSize: '28px', 
+    marginBottom: '5px', 
+    textAlign: 'center',
+    fontWeight: 'bold' 
+  },
+  subtitle: { 
+    textAlign: 'center', 
+    color: '#aaa', 
+    fontSize: '14px', 
+    marginBottom: '30px' 
+  },
+  inputGroup: { 
+    marginBottom: '20px' 
+  },
+  label: { 
+    display: 'block', 
+    marginBottom: '8px', 
+    fontSize: '14px', 
+    fontWeight: '500' 
+  },
+  input: {
+    width: '100%',
+    padding: '12px',
+    backgroundColor: '#121212',
+    border: '1px solid #333',
+    borderRadius: '4px',
+    color: '#fff',
+    fontSize: '15px',
+    outline: 'none',
+    boxSizing: 'border-box',
+  },
+  submitBtn: {
+    width: '100%',
+    padding: '12px',
+    backgroundColor: '#ff6b00',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '4px',
+    fontWeight: 'bold',
+    fontSize: '16px',
+    cursor: 'pointer',
+    marginTop: '10px',
+    transition: '0.2s',
+  },
+  errorBox: { 
+    backgroundColor: 'rgba(255, 51, 51, 0.1)', 
+    color: '#ff3333', 
+    border: '1px solid #ff3333', 
+    padding: '12px', 
+    borderRadius: '4px', 
+    marginBottom: '25px', 
+    fontSize: '14px', 
+    textAlign: 'center' 
+  },
+};

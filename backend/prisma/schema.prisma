@@ -11,12 +11,9 @@ model User {
   id               Int             @id @default(autoincrement())
   name             String
   email            String          @unique
-  role             String          // 'client' ou 'freelancer'
-  bio              String?
-  hourlyRate       Decimal?        @map("hourly_rate")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  
-  // Relacionamentos
+  password         String
+  role             String
+  createdAt        DateTime        @default(now()) @map("created_at") // <-- Corrigido
   projects         Project[]       @relation("ClientProjects")
   proposals        Proposal[]
   githubProjects   GithubProject[]
@@ -32,16 +29,15 @@ model User {
 }
 
 model Project {
-  id          Int        @id @default(autoincrement())
-  clientId    Int        @map("client_id")
+  id          Int         @id @default(autoincrement())
+  clientId    Int         @map("client_id")
   title       String
   description String
   budget      Decimal
-  status      String     @default("pending") // pending, active, completed
-  createdAt   DateTime   @default(now()) @map("created_at")
-
-  // Relacionamentos
-  client      User       @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
+  deliveryTime String?    @map("delivery_time")
+  status      String      @default("open")
+  createdAt   DateTime    @default(now()) @map("created_at")
+  client      User        @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
   proposals   Proposal[]
   milestones  Milestone[]
   payments    Payment[]
@@ -56,12 +52,10 @@ model Proposal {
   freelancerId Int      @map("freelancer_id")
   amount       Decimal
   coverText    String?  @map("cover_text")
-  status       String   @default("pending") // pending, accepted, rejected
+  status       String   @default("pending")
   createdAt    DateTime @default(now()) @map("created_at")
-
-  // Relacionamentos
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  freelancer User     @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  freelancer   User     @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
 
   @@map("proposals")
 }
@@ -72,33 +66,29 @@ model Milestone {
   title       String
   description String
   amount      Decimal
-  dueDate     DateTime? @map("due_date")
-  status      String    @default("pending") // pending, completed
+  dueDate     DateTime? @map("due_date") // Mapeado para bater com o Supabase
+  status      String    @default("pending")
   createdAt   DateTime  @default(now()) @map("created_at")
-
-  // Relacionamentos
-  project  Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  payments Payment[]
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  payments    Payment[]
 
   @@map("milestones")
 }
 
 model Payment {
-  id          Int       @id @default(autoincrement())
-  projectId   Int       @map("project_id")
-  milestoneId Int?      @map("milestone_id")
-  payerId     Int       @map("payer_id")
-  receiverId  Int       @map("receiver_id")
+  id          Int        @id @default(autoincrement())
+  projectId   Int        @map("project_id")
+  milestoneId Int?       @map("milestone_id")
+  payerId     Int        @map("payer_id")
+  receiverId  Int        @map("receiver_id")
   amount      Decimal
-  status      String    @default("pending") // pending, paid
-  paidAt      DateTime? @map("paid_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-
-  // Relacionamentos
-  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  milestone Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  payer     User       @relation("PayerPayments", fields: [payerId], references: [id], onDelete: Cascade)
-  receiver  User       @relation("ReceiverPayments", fields: [receiverId], references: [id], onDelete: Cascade)
+  status      String     @default("pending")
+  paidAt      DateTime?  @map("paid_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone   Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  payer       User       @relation("PayerPayments", fields: [payerId], references: [id], onDelete: Cascade)
+  receiver    User       @relation("ReceiverPayments", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@map("payments")
 }
@@ -110,9 +100,7 @@ model GithubProject {
   title        String?
   description  String?
   createdAt    DateTime @default(now()) @map("created_at")
-
-  // Relacionamentos
-  freelancer User @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  freelancer   User     @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
 
   @@map("github_projects")
 }
@@ -126,26 +114,22 @@ model Experience {
   endDate     DateTime? @map("end_date")
   description String?
   createdAt   DateTime  @default(now()) @map("created_at")
-
-  // Relacionamentos
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("experiences")
 }
 
 model Review {
-  id         Int      @id @default(autoincrement())
-  projectId  Int      @map("project_id")
-  reviewerId Int      @map("reviewer_id")
-  revieweeId Int      @map("reviewee_id")
-  rating     Int
-  message    String?
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  // Relacionamentos
-  project  Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  reviewer User    @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
-  reviewee User    @relation("Reviewee", fields: [revieweeId], references: [id], onDelete: Cascade)
+  id        Int      @id @default(autoincrement())
+  projectId Int      @map("project_id")
+  reviewerId Int     @map("reviewer_id")
+  revieweeId Int     @map("reviewee_id")
+  rating    Int
+  message   String?
+  createdAt DateTime @default(now()) @map("created_at")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewer  User     @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewee  User     @relation("Reviewee", fields: [revieweeId], references: [id], onDelete: Cascade)
 
   @@map("reviews")
 }
@@ -157,10 +141,8 @@ model ChatMessage {
   senderName String   @map("sender_name")
   text       String
   createdAt  DateTime @default(now()) @map("created_at")
-
-  // Relacionamentos
-  sender    User @relation("Sender", fields: [fromUserId], references: [id], onDelete: Cascade)
-  recipient User @relation("Recipient", fields: [toUserId], references: [id], onDelete: Cascade)
+  sender     User     @relation("Sender", fields: [fromUserId], references: [id], onDelete: Cascade)
+  recipient  User     @relation("Recipient", fields: [toUserId], references: [id], onDelete: Cascade)
 
   @@map("chat_messages")
 }
