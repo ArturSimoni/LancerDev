@@ -6,11 +6,9 @@ export default function MeusAnuncios() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  
   const [editingProject, setEditingProject] = useState(null);
-  const [editTitle, setEditTitle] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [editBudget, setEditBudget] = useState('');
-  const [editDeliveryTime, setEditDeliveryTime] = useState('');
+  const [formData, setFormData] = useState({ title: '', description: '', budget: '', deliveryTime: '' });
 
   useEffect(() => { fetchMyProjects(); }, []);
 
@@ -18,63 +16,95 @@ export default function MeusAnuncios() {
     try {
       const response = await api.get('/projects/meus-anuncios');
       setProjects(response.data);
-    } catch (error) { console.error('Erro ao buscar anúncios:', error); }
+    } catch (error) { console.error('Erro ao buscar:', error); }
     finally { setLoading(false); }
   }
 
   async function handleDelete(id) {
-    if (!window.confirm('Excluir anúncio?')) return;
+    if (!window.confirm('Excluir este projeto?')) return;
     try {
       await api.delete(`/projects/${id}`);
       setProjects(projects.filter(p => p.id !== id));
-    } catch (error) { alert('Erro ao deletar.'); }
+    } catch (error) { alert('Erro ao deletar projeto.'); }
   }
 
   function handleOpenEdit(project) {
     setEditingProject(project);
-    setEditTitle(project.title);
-    setEditDescription(project.description);
-    setEditBudget(project.budget);
-    setEditDeliveryTime(project.deliveryTime || '');
+    setFormData({ 
+      title: project.title, 
+      description: project.description, 
+      budget: project.budget, 
+      deliveryTime: project.deliveryTime || '' 
+    });
   }
 
   async function handleSaveEdit(e) {
     e.preventDefault();
     try {
-      const response = await api.put(`/projects/${editingProject.id}`, {
-        title: editTitle, description: editDescription, budget: Number(editBudget), deliveryTime: editDeliveryTime
-      });
+      const response = await api.put(`/projects/${editingProject.id}`, formData);
       setProjects(projects.map(p => p.id === editingProject.id ? response.data : p));
       setEditingProject(null);
-    } catch (error) { alert('Erro ao atualizar.'); }
+    } catch (error) { alert('Erro ao atualizar projeto.'); }
   }
 
   return (
-    <div style={styles.container}>
-      <h2>Meus Anúncios</h2>
-      <div style={styles.grid}>
-        {projects.map((project) => (
-          <div key={project.id} style={styles.card}>
-            <h3>{project.title}</h3>
-            <p>{project.description}</p>
-            <div style={styles.actions}>
-              <button onClick={() => navigate(`/projetos/${project.id}/propostas`)} style={styles.viewBtn}>Ver Propostas</button>
-              <button onClick={() => handleOpenEdit(project)} style={styles.editBtn}>Editar</button>
-              <button onClick={() => handleDelete(project.id)} style={styles.deleteBtn}>Excluir</button>
-            </div>
+    <div style={s.page}>
+      <div style={s.container}>
+        <h1 style={s.title}>Meus Anúncios</h1>
+        
+        {loading ? <p style={{color: '#fff'}}>Carregando...</p> : (
+          <div style={s.grid}>
+            {projects.map((p) => (
+              <div key={p.id} style={s.card}>
+                <div style={s.cardInfo}>
+                  <h3 style={s.cardTitle}>{p.title}</h3>
+                  <p style={s.cardDesc}>{p.description} | Prazo: {p.deliveryTime}</p>
+                </div>
+                <div style={s.actions}>
+                  <button onClick={() => navigate(`/projetos/${p.id}/propostas`)} style={s.viewBtn}>Ver Propostas</button>
+                  <button onClick={() => handleOpenEdit(p)} style={s.editBtn}>Editar</button>
+                  <button onClick={() => handleDelete(p.id)} style={s.deleteBtn}>Excluir</button>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
+
+        {editingProject && (
+          <div style={s.modalOverlay}>
+            <form onSubmit={handleSaveEdit} style={s.modalCard}>
+              <h2 style={{color: '#fff', fontSize: '18px', marginBottom: '10px'}}>Editar Projeto</h2>
+              <input style={s.input} placeholder="Título" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required />
+              <textarea style={{...s.input, height: '80px', resize: 'none'}} placeholder="Descrição" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required />
+              <input style={s.input} type="number" placeholder="Orçamento" value={formData.budget} onChange={e => setFormData({...formData, budget: e.target.value})} required />
+              <input style={s.input} placeholder="Prazo de Entrega (ex: 15 dias)" value={formData.deliveryTime} onChange={e => setFormData({...formData, deliveryTime: e.target.value})} required />
+              
+              <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
+                <button type="submit" style={s.viewBtn}>Salvar</button>
+                <button type="button" onClick={() => setEditingProject(null)} style={s.deleteBtn}>Cancelar</button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-const styles = {
-  container: { maxWidth: '1200px', margin: '40px auto', padding: '0 20px', color: '#fff' },
-  grid: { display: 'grid', gap: '20px', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' },
-  card: { backgroundColor: '#1e1e1e', padding: '20px', borderRadius: '8px', border: '1px solid #333' },
-  actions: { display: 'flex', gap: '10px', marginTop: '15px' },
-  viewBtn: { flex: 1, backgroundColor: '#ff6b00', color: '#fff', border: 'none', padding: '8px', borderRadius: '4px', cursor: 'pointer' },
-  editBtn: { flex: 1, backgroundColor: 'transparent', border: '1px solid #ff6b00', color: '#ff6b00', padding: '8px', borderRadius: '4px', cursor: 'pointer' },
-  deleteBtn: { flex: 1, backgroundColor: 'transparent', border: '1px solid #ff3333', color: '#ff3333', padding: '8px', borderRadius: '4px', cursor: 'pointer' }
+const s = {
+  page: { minHeight: '100vh', backgroundColor: '#0a0a0a', padding: '40px 20px', color: '#fff' },
+  container: { maxWidth: '1000px', margin: '0 auto' },
+  title: { marginBottom: '30px', fontWeight: '700', color: '#fff' },
+  grid: { display: 'flex', flexDirection: 'column', gap: '15px' },
+  card: { backgroundColor: '#111', padding: '20px', borderRadius: '0px', border: '1px solid #1e1e1e', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  cardInfo: { flex: 2, marginRight: '20px' },
+  cardTitle: { margin: '0 0 5px 0', color: '#fff' },
+  cardDesc: { color: '#888', fontSize: '14px', margin: 0 },
+  actions: { display: 'flex', gap: '10px', flex: 1, justifyContent: 'flex-end' },
+  viewBtn: { backgroundColor: '#ff6b00', border: 'none', color: '#000', padding: '10px 16px', borderRadius: '0px', fontWeight: '700', cursor: 'pointer' },
+  editBtn: { backgroundColor: '#222', border: '1px solid #333', color: '#fff', padding: '10px 16px', borderRadius: '0px', cursor: 'pointer' },
+  deleteBtn: { backgroundColor: 'transparent', border: '1px solid #444', color: '#ff5555', padding: '10px 16px', borderRadius: '0px', cursor: 'pointer' },
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
+  modalCard: { backgroundColor: '#111', padding: '30px', borderRadius: '0px', width: '400px', display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid #333' },
+  input: { padding: '12px', backgroundColor: '#0d0d0d', border: '1px solid #222', borderRadius: '0px', color: '#fff', outline: 'none' }
 };

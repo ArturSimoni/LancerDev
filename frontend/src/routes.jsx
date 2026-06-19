@@ -11,6 +11,9 @@ import MinhasPropostas from "./pages/MinhasPropostas";
 import GerenciarPropostas from "./pages/GerenciarPropostas";
 import Chat from "./pages/Chat";
 
+// 1. ADICIONEI A IMPORTAÇÃO AQUI:
+import DetalhesProjeto from "./pages/DetalhesProjeto"; 
+
 const ProtectedRoute = ({ children, isPrivate }) => {
   const token = localStorage.getItem('@LancerDev:token');
   if (isPrivate && !token) return <Navigate to="/login" replace />;
@@ -36,6 +39,10 @@ export const router = createBrowserRouter([
       { path: "dashboard", element: <ProtectedRoute isPrivate={true}><Dashboard /></ProtectedRoute> },
       { path: "criar-projeto", element: <ProtectedRoute isPrivate={true}><CriarProjeto /></ProtectedRoute> },
       { path: "meus-anuncios", element: <ProtectedRoute isPrivate={true}><MeusAnuncios /></ProtectedRoute> },
+      
+      // 2. CORRIGIDO DE "projetos/:id" PARA "projeto/:id" (Singular)
+      { path: "projeto/:id", element: <ProtectedRoute isPrivate={true}><DetalhesProjeto /></ProtectedRoute> },
+      
       { path: "projetos/:projectId/propostas", element: <ProtectedRoute isPrivate={true}><GerenciarPropostas /></ProtectedRoute> },
       { path: "projetos", element: <ProtectedRoute isPrivate={true}><BuscarProjetos /></ProtectedRoute> },
       { path: "propostas", element: <ProtectedRoute isPrivate={true}><MinhasPropostas /></ProtectedRoute> },
