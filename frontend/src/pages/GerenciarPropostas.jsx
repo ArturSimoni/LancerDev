@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom'; // ← ADICIONADO
 import api from '../services/api';
 
-export default function GerenciarPropostas({ projectId, onProjectStarted }) {
+export default function GerenciarPropostas() { // ← removido props
+  const { projectId } = useParams(); // ← pega da URL, não de prop
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [accepting, setAccepting] = useState(null); // ID da proposta que está sendo aceita
+  const [accepting, setAccepting] = useState(null);
 
   async function loadProposals() {
     try {
-      const response = await api.get(`/projects/${projectId}/propostas`);
+      // CORREÇÃO BUG 2: rota correta bate com o backend (/propostas/projeto/:id)
+      const response = await api.get(`/propostas/projeto/${projectId}`);
       setProposals(response.data);
     } catch (error) {
       console.error('Erro ao buscar candidaturas:', error);
@@ -26,12 +29,12 @@ export default function GerenciarPropostas({ projectId, onProjectStarted }) {
 
     setAccepting(proposalId);
     try {
-      await api.post(`/projects/propostas/${proposalId}/accept`, {
-        milestones: proposalMilestones 
+      // CORREÇÃO: prefixo /propostas coerente com o backend
+      await api.post(`/propostas/${proposalId}/accept`, {
+        milestones: proposalMilestones
       });
 
       alert('Contrato fechado com sucesso!');
-      if (onProjectStarted) onProjectStarted();
     } catch (error) {
       console.error('Erro ao aprovar proposta:', error);
       alert(error.response?.data?.message || 'Falha ao aceitar proposta.');
@@ -67,9 +70,9 @@ export default function GerenciarPropostas({ projectId, onProjectStarted }) {
                 ))}
               </div>
 
-              <button 
+              <button
                 disabled={accepting !== null}
-                onClick={() => handleAccept(prop.id, prop.milestones)} 
+                onClick={() => handleAccept(prop.id, prop.milestones)}
                 style={{
                   ...styles.acceptBtn,
                   opacity: accepting === prop.id ? 0.6 : 1,

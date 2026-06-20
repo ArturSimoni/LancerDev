@@ -3,33 +3,34 @@ import { io } from 'socket.io-client';
 import api from '../services/api';
 
 export default function Chat() {
-  const user = localStorage.getItem('@LancerDev:user') ? JSON.parse(localStorage.getItem('@LancerDev:user')) : null;
-  
+  const user = localStorage.getItem('@LancerDev:user')
+    ? JSON.parse(localStorage.getItem('@LancerDev:user'))
+    : null;
+
   const [conversations, setConversations] = useState([]);
   const [activeRoom, setActiveRoom] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
-  
+
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const activeRoomRef = useRef(null); // ADICIONADO: ref para acessar activeRoom dentro do socket
 
-  // 1. Inicializa a conexão com o WebSocket Server
   useEffect(() => {
-    // Altere para a URL correta do seu backend se não for a 3333
-    socketRef.current = io('http://localhost:3333', {
+    socketRef.current = io('http://localhost:3000', {
       auth: { token: localStorage.getItem('@LancerDev:token') }
     });
 
-    // Ouve mensagens novas chegando em tempo real
+    // CORRIGIDO: usa activeRoomRef para evitar closure desatualizada
     socketRef.current.on('receive_message', (message) => {
+      if (!activeRoomRef.current) return;
+      if (Number(message.chatId) !== Number(activeRoomRef.current.id)) return;
       setMessages((prev) => {
-        // Evita duplicar mensagens caso chegue o eco do próprio remetente
         if (prev.some(msg => msg.id === message.id)) return prev;
         return [...prev, message];
       });
     });
 
-    // Busca a lista de conversas ativas do usuário logado ao abrir a tela
     async function loadConversations() {
       try {
         const response = await api.get('/chats/conversations');
@@ -40,14 +41,14 @@ export default function Chat() {
     }
     loadConversations();
 
-    return () => {
-      socketRef.current.disconnect();
-    };
+    return () => { socketRef.current.disconnect(); };
   }, []);
 
-  // 2. Entra em uma sala específica e carrega o histórico de mensagens
   useEffect(() => {
     if (!activeRoom) return;
+
+    // ADICIONADO: mantém ref sincronizada com o estado
+    activeRoomRef.current = activeRoom;
 
     socketRef.current.emit('join_room', { roomId: activeRoom.id });
 
@@ -56,47 +57,36 @@ export default function Chat() {
         const response = await api.get(`/chats/messages/${activeRoom.id}`);
         setMessages(response.data);
       } catch (error) {
-        console.error('Erro ao carregar mensagens anteriores:', error);
+        console.error('Erro ao carregar mensagens:', error);
       }
     }
     loadMessages();
   }, [activeRoom]);
 
-  // 3. Auto-scroll para manter a última mensagem sempre visível
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 4. Envio de novas mensagens
-  async function handleSendMessage(e) {
-    e.preventDefault();
+  function handleSendMessage() {
     if (!newMessage.trim() || !activeRoom) return;
-
-    const messageData = {
+    socketRef.current.emit('send_message', {
       roomId: activeRoom.id,
       text: newMessage,
-      senderId: user?.id,
-    };
-
-    // Emite o evento via Socket para distribuição instantânea
-    socketRef.current.emit('send_message', messageData);
-    
-    // Otimismo na interface: adiciona localmente antes mesmo do retorno total do banco
-    setMessages((prev) => [...prev, { ...messageData, id: Date.now(), createdAt: new Date() }]);
+      senderId: user?.id
+    });
     setNewMessage('');
   }
 
   return (
     <div style={styles.container}>
-      {/* Barra Lateral: Lista de Contatos/Conversas */}
       <div style={styles.sidebar}>
         <h3 style={styles.sidebarTitle}>Suas Conversas</h3>
         {conversations.length === 0 ? (
           <p style={styles.emptyText}>Nenhum chat ativo no momento.</p>
         ) : (
           conversations.map((chat) => (
-            <div 
-              key={chat.id} 
+            <div
+              key={chat.id}
               onClick={() => setActiveRoom(chat)}
               style={{
                 ...styles.conversationItem,
@@ -111,25 +101,24 @@ export default function Chat() {
         )}
       </div>
 
-      {/* Janela Principal do Chat */}
       <div style={styles.chatWindow}>
         {activeRoom ? (
           <>
             <div style={styles.chatHeader}>
-              <h4>{activeRoom.project?.title}</h4>
-              <p>Conversando com: {activeRoom.otherParticipant?.name}</p>
+              <h4 style={{ margin: 0 }}>{activeRoom.project?.title}</h4>
+              <p style={{ margin: '4px 0 0 0', color: '#aaa', fontSize: '13px' }}>
+                Conversando com: {activeRoom.otherParticipant?.name}
+              </p>
             </div>
 
             <div style={styles.messageBox}>
               {messages.map((msg) => {
-                const isMe = msg.senderId === user?.id;
+                // CORRIGIDO: compara como número pois o banco retorna Int
+                const isMe = Number(msg.senderId) === Number(user?.id);
                 return (
-                  <div 
-                    key={msg.id} 
-                    style={{
-                      ...styles.messageRow,
-                      justifyContent: isMe ? 'flex-end' : 'flex-start'
-                    }}
+                  <div
+                    key={msg.id}
+                    style={{ ...styles.messageRow, justifyContent: isMe ? 'flex-end' : 'flex-start' }}
                   >
                     <div style={{
                       ...styles.messageBubble,
@@ -147,16 +136,17 @@ export default function Chat() {
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSendMessage} style={styles.inputArea}>
+            <div style={styles.inputArea}>
               <input
                 type="text"
                 placeholder="Digite sua mensagem aqui..."
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                 style={styles.input}
               />
-              <button type="submit" style={styles.sendBtn}>Enviar</button>
-            </form>
+              <button onClick={handleSendMessage} style={styles.sendBtn}>Enviar</button>
+            </div>
           </>
         ) : (
           <div style={styles.noActiveChat}>

@@ -8,11 +8,10 @@ import CriarProjeto from "./pages/CriarProjeto";
 import MeusAnuncios from "./pages/MeusAnuncios";
 import BuscarProjetos from "./pages/BuscarProjetos";
 import MinhasPropostas from "./pages/MinhasPropostas";
-import GerenciarPropostas from "./pages/GerenciarPropostas";
 import Chat from "./pages/Chat";
-
-// 1. ADICIONEI A IMPORTAÇÃO AQUI:
-import DetalhesProjeto from "./pages/DetalhesProjeto"; 
+import DetalhesProjeto from "./pages/DetalhesProjeto";
+import VerPropostas from "./pages/VerPropostas";
+// REMOVIDO: GerenciarPropostas (substituído por VerPropostas)
 
 const ProtectedRoute = ({ children, isPrivate }) => {
   const token = localStorage.getItem('@LancerDev:token');
@@ -34,19 +33,21 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Home /> },
-      { path: "login", element: <ProtectedRoute isPrivate={false}><Login /></ProtectedRoute> },
-      { path: "cadastro", element: <ProtectedRoute isPrivate={false}><Cadastro /></ProtectedRoute> },
-      { path: "dashboard", element: <ProtectedRoute isPrivate={true}><Dashboard /></ProtectedRoute> },
+      { path: "login",         element: <ProtectedRoute isPrivate={false}><Login /></ProtectedRoute> },
+      { path: "cadastro",      element: <ProtectedRoute isPrivate={false}><Cadastro /></ProtectedRoute> },
+      { path: "dashboard",     element: <ProtectedRoute isPrivate={true}><Dashboard /></ProtectedRoute> },
       { path: "criar-projeto", element: <ProtectedRoute isPrivate={true}><CriarProjeto /></ProtectedRoute> },
       { path: "meus-anuncios", element: <ProtectedRoute isPrivate={true}><MeusAnuncios /></ProtectedRoute> },
-      
-      // 2. CORRIGIDO DE "projetos/:id" PARA "projeto/:id" (Singular)
-      { path: "projeto/:id", element: <ProtectedRoute isPrivate={true}><DetalhesProjeto /></ProtectedRoute> },
-      
-      { path: "projetos/:projectId/propostas", element: <ProtectedRoute isPrivate={true}><GerenciarPropostas /></ProtectedRoute> },
-      { path: "projetos", element: <ProtectedRoute isPrivate={true}><BuscarProjetos /></ProtectedRoute> },
-      { path: "propostas", element: <ProtectedRoute isPrivate={true}><MinhasPropostas /></ProtectedRoute> },
-      { path: "chat", element: <ProtectedRoute isPrivate={true}><Chat /></ProtectedRoute> },
+      { path: "projetos",      element: <ProtectedRoute isPrivate={true}><BuscarProjetos /></ProtectedRoute> },
+      { path: "propostas",     element: <ProtectedRoute isPrivate={true}><MinhasPropostas /></ProtectedRoute> },
+      { path: "chat",          element: <ProtectedRoute isPrivate={true}><Chat /></ProtectedRoute> },
+
+      // Detalhe do projeto para o freelancer enviar proposta
+      { path: "projeto/:id",   element: <ProtectedRoute isPrivate={true}><DetalhesProjeto /></ProtectedRoute> },
+
+      // CORRIGIDO: uma única rota para ver/aceitar propostas (sem duplicata)
+      { path: "projetos/:projectId/propostas", element: <ProtectedRoute isPrivate={true}><VerPropostas /></ProtectedRoute> },
+
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

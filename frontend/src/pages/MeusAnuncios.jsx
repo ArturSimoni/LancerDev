@@ -38,8 +38,8 @@ export default function MeusAnuncios() {
     });
   }
 
-  async function handleSaveEdit(e) {
-    e.preventDefault();
+  // CORREÇÃO BUG 2: removido e.preventDefault() (não é mais um form HTML)
+  async function handleSaveEdit() {
     try {
       const response = await api.put(`/projects/${editingProject.id}`, formData);
       setProjects(projects.map(p => p.id === editingProject.id ? response.data : p));
@@ -61,6 +61,7 @@ export default function MeusAnuncios() {
                   <p style={s.cardDesc}>{p.description} | Prazo: {p.deliveryTime}</p>
                 </div>
                 <div style={s.actions}>
+                  {/* CORREÇÃO BUG 3: rota correta com projectId para o GerenciarPropostas */}
                   <button onClick={() => navigate(`/projetos/${p.id}/propostas`)} style={s.viewBtn}>Ver Propostas</button>
                   <button onClick={() => handleOpenEdit(p)} style={s.editBtn}>Editar</button>
                   <button onClick={() => handleDelete(p.id)} style={s.deleteBtn}>Excluir</button>
@@ -72,18 +73,41 @@ export default function MeusAnuncios() {
 
         {editingProject && (
           <div style={s.modalOverlay}>
-            <form onSubmit={handleSaveEdit} style={s.modalCard}>
+            {/* CORREÇÃO BUG 2: trocado <form> por <div> — form dentro de iframe/React pode causar reload */}
+            <div style={s.modalCard}>
               <h2 style={{color: '#fff', fontSize: '18px', marginBottom: '10px'}}>Editar Projeto</h2>
-              <input style={s.input} placeholder="Título" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} required />
-              <textarea style={{...s.input, height: '80px', resize: 'none'}} placeholder="Descrição" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} required />
-              <input style={s.input} type="number" placeholder="Orçamento" value={formData.budget} onChange={e => setFormData({...formData, budget: e.target.value})} required />
-              <input style={s.input} placeholder="Prazo de Entrega (ex: 15 dias)" value={formData.deliveryTime} onChange={e => setFormData({...formData, deliveryTime: e.target.value})} required />
+              <input
+                style={s.input}
+                placeholder="Título"
+                value={formData.title}
+                onChange={e => setFormData({...formData, title: e.target.value})}
+              />
+              <textarea
+                style={{...s.input, height: '80px', resize: 'none'}}
+                placeholder="Descrição"
+                value={formData.description}
+                onChange={e => setFormData({...formData, description: e.target.value})}
+              />
+              <input
+                style={s.input}
+                type="number"
+                placeholder="Orçamento"
+                value={formData.budget}
+                onChange={e => setFormData({...formData, budget: e.target.value})}
+              />
+              <input
+                style={s.input}
+                placeholder="Prazo de Entrega (ex: 15 dias)"
+                value={formData.deliveryTime}
+                onChange={e => setFormData({...formData, deliveryTime: e.target.value})}
+              />
               
               <div style={{display: 'flex', gap: '10px', marginTop: '10px'}}>
-                <button type="submit" style={s.viewBtn}>Salvar</button>
-                <button type="button" onClick={() => setEditingProject(null)} style={s.deleteBtn}>Cancelar</button>
+                {/* CORREÇÃO BUG 2: onClick direto em vez de type="submit" */}
+                <button onClick={handleSaveEdit} style={s.viewBtn}>Salvar</button>
+                <button onClick={() => setEditingProject(null)} style={s.deleteBtn}>Cancelar</button>
               </div>
-            </form>
+            </div>
           </div>
         )}
       </div>

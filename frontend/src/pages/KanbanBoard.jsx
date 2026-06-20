@@ -5,21 +5,20 @@ export default function KanbanBoard({ projectId }) {
   const [milestones, setMilestones] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Colunas padrão do Kanban
   const columns = [
-    { id: 'pending', title: 'A Fazer 📋' },
+    { id: 'pending',     title: 'A Fazer 📋' },
     { id: 'in_progress', title: 'Desenvolvendo 💻' },
-    { id: 'review', title: 'Em Revisão 👀' },
-    { id: 'done', title: 'Concluído & Pago 🎉' }
+    { id: 'review',      title: 'Em Revisão 👀' },
+    { id: 'done',        title: 'Concluído & Pago 🎉' },
   ];
 
   async function loadKanbanData() {
     try {
-      // Endpoint para buscar as Milestones do projeto selecionado
-      const response = await api.get(`/projects/${projectId}/milestones`);
+      // CORRIGIDO: rota correta sem o prefixo /projects
+      const response = await api.get(`/milestones/projeto/${projectId}`);
       setMilestones(response.data);
     } catch (error) {
-      console.error("Erro ao carregar Kanban:", error);
+      console.error('Erro ao carregar Kanban:', error);
     } finally {
       setLoading(false);
     }
@@ -29,20 +28,19 @@ export default function KanbanBoard({ projectId }) {
     if (projectId) loadKanbanData();
   }, [projectId]);
 
-  // Atualiza a coluna no banco e na interface local
   async function moveCard(milestoneId, newStatus) {
     try {
-      await api.patch(`/projects/milestones/${milestoneId}/status`, { status: newStatus });
-      
-      // Altera o estado localmente de forma fluida
-      setMilestones(prev => prev.map(m => m.id === milestoneId ? { ...m, status: newStatus } : m));
-      
+      // CORRIGIDO: rota correta sem o prefixo /projects
+      await api.patch(`/milestones/${milestoneId}/status`, { status: newStatus });
+      setMilestones(prev =>
+        prev.map(m => m.id === milestoneId ? { ...m, status: newStatus } : m)
+      );
       if (newStatus === 'done') {
-        alert("Sensacional! Esta etapa foi concluída e o valor foi transferido para a carteira do Freelancer.");
+        alert('Etapa concluída! O valor será liberado para o Freelancer.');
       }
     } catch (error) {
-      console.error("Erro ao mover card:", error);
-      alert("Não foi possível mover o card. Tente novamente.");
+      console.error('Erro ao mover card:', error);
+      alert('Não foi possível mover o card. Tente novamente.');
     }
   }
 
@@ -51,45 +49,52 @@ export default function KanbanBoard({ projectId }) {
   return (
     <div style={styles.kanbanContainer}>
       <h3 style={styles.boardTitle}>Painel de Evolução do Projeto (Kanban)</h3>
-      
+
       <div style={styles.boardGrid}>
         {columns.map(col => (
           <div key={col.id} style={styles.kanbanColumn}>
             <h4 style={styles.columnTitle}>{col.title}</h4>
-            
+
             <div style={styles.cardList}>
               {milestones
                 .filter(m => m.status === col.id)
-                .map(item => (
-                  <div key={item.id} style={styles.kanbanCard}>
-                    <h5 style={styles.cardHeader}>{item.title}</h5>
-                    <p style={styles.cardDescription}>{item.description || 'Sem descrição adicional.'}</p>
-                    <div style={styles.cardFooter}>
-                      <span style={styles.moneyBadge}>R$ {Number(item.amount).toLocaleString('pt-BR')}</span>
-                    </div>
+                .map(item => {
+                  const colIndex = columns.findIndex(c => c.id === col.id);
+                  return (
+                    <div key={item.id} style={styles.kanbanCard}>
+                      <h5 style={styles.cardHeader}>{item.title}</h5>
+                      <p style={styles.cardDescription}>{item.description || 'Sem descrição adicional.'}</p>
+                      <div style={styles.cardFooter}>
+                        <span style={styles.moneyBadge}>
+                          R$ {Number(item.amount).toLocaleString('pt-BR')}
+                        </span>
+                      </div>
 
-                    {/* Botões Simples de Ação para Mover de Coluna */}
-                    <div style={styles.actionRow}>
-                      {col.id !== 'pending' && (
-                        <button 
-                          onClick={() => moveCard(item.id, columns[columns.findIndex(c => c.id === col.id) - 1].id)}
-                          style={styles.arrowBtn}
-                        >
-                          ◀
-                        </button>
-                      )}
-                      <div style={{ flex: 1 }} />
-                      {col.id !== 'done' && (
-                        <button 
-                          onClick={() => moveCard(item.id, columns[columns.findIndex(c => c.id === col.id) + 1].id)}
-                          style={{ ...styles.arrowBtn, backgroundColor: col.id === 'review' ? '#00c851' : '#444' }}
-                        >
-                          {col.id === 'review' ? 'Concluir & Liberar 💸' : '▶'}
-                        </button>
-                      )}
+                      <div style={styles.actionRow}>
+                        {col.id !== 'pending' && (
+                          <button
+                            onClick={() => moveCard(item.id, columns[colIndex - 1].id)}
+                            style={styles.arrowBtn}
+                          >
+                            ◀
+                          </button>
+                        )}
+                        <div style={{ flex: 1 }} />
+                        {col.id !== 'done' && (
+                          <button
+                            onClick={() => moveCard(item.id, columns[colIndex + 1].id)}
+                            style={{
+                              ...styles.arrowBtn,
+                              backgroundColor: col.id === 'review' ? '#00c851' : '#444'
+                            }}
+                          >
+                            {col.id === 'review' ? 'Concluir & Liberar 💸' : '▶'}
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
             </div>
           </div>
         ))}
@@ -111,5 +116,5 @@ const styles = {
   cardFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '5px' },
   moneyBadge: { color: '#00c851', fontWeight: 'bold', fontSize: '13px' },
   actionRow: { display: 'flex', marginTop: '8px', borderTop: '1px solid #2d2d2d', paddingTop: '8px', gap: '5px' },
-  arrowBtn: { backgroundColor: '#2d2d2d', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' }
+  arrowBtn: { backgroundColor: '#2d2d2d', color: '#fff', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer', fontSize: '12px' },
 };

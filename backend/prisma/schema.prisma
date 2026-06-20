@@ -8,40 +8,42 @@ datasource db {
 }
 
 model User {
-  id               Int             @id @default(autoincrement())
+  id               Int               @id @default(autoincrement())
   name             String
-  email            String          @unique
+  email            String            @unique
   password         String
   role             String
-  createdAt        DateTime        @default(now()) @map("created_at") // <-- Corrigido
-  projects         Project[]       @relation("ClientProjects")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  projects         Project[]         @relation("ClientProjects")
   proposals        Proposal[]
   githubProjects   GithubProject[]
   experiences      Experience[]
-  paymentsSent     Payment[]       @relation("PayerPayments")
-  paymentsReceived Payment[]       @relation("ReceiverPayments")
-  reviewsGiven     Review[]        @relation("Reviewer")
-  reviewsReceived  Review[]        @relation("Reviewee")
-  messagesSent     ChatMessage[]   @relation("Sender")
-  messagesReceived ChatMessage[]   @relation("Recipient")
+  paymentsSent     Payment[]         @relation("PayerPayments")
+  paymentsReceived Payment[]         @relation("ReceiverPayments")
+  reviewsGiven     Review[]          @relation("Reviewer")
+  reviewsReceived  Review[]          @relation("Reviewee")
+  clientChats      Chat[]            @relation("ClientChats")
+  freelancerChats  Chat[]            @relation("FreelancerChats")
+  roomMessages     ChatRoomMessage[] @relation("RoomMessagesSent")
 
   @@map("users")
 }
 
 model Project {
-  id          Int         @id @default(autoincrement())
-  clientId    Int         @map("client_id")
-  title       String
-  description String
-  budget      Decimal
+  id           Int        @id @default(autoincrement())
+  clientId     Int        @map("client_id")
+  title        String
+  description  String
+  budget       Decimal
   deliveryTime String?    @map("delivery_time")
-  status      String      @default("open")
-  createdAt   DateTime    @default(now()) @map("created_at")
-  client      User        @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
-  proposals   Proposal[]
-  milestones  Milestone[]
-  payments    Payment[]
-  reviews     Review[]
+  status       String     @default("open")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  client       User       @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
+  proposals    Proposal[]
+  milestones   Milestone[]
+  payments     Payment[]
+  reviews      Review[]
+  chat         Chat?
 
   @@map("projects")
 }
@@ -66,7 +68,7 @@ model Milestone {
   title       String
   description String
   amount      Decimal
-  dueDate     DateTime? @map("due_date") // Mapeado para bater com o Supabase
+  dueDate     DateTime? @map("due_date")
   status      String    @default("pending")
   createdAt   DateTime  @default(now()) @map("created_at")
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -91,6 +93,32 @@ model Payment {
   receiver    User       @relation("ReceiverPayments", fields: [receiverId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+model Chat {
+  id           Int               @id @default(autoincrement())
+  projectId    Int               @unique @map("project_id")
+  clientId     Int               @map("client_id")
+  freelancerId Int               @map("freelancer_id")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  client       User              @relation("ClientChats", fields: [clientId], references: [id], onDelete: Cascade)
+  freelancer   User              @relation("FreelancerChats", fields: [freelancerId], references: [id], onDelete: Cascade)
+  messages     ChatRoomMessage[]
+
+  @@map("chats")
+}
+
+model ChatRoomMessage {
+  id        Int      @id @default(autoincrement())
+  chatId    Int      @map("chat_id")
+  senderId  Int      @map("sender_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  sender    User     @relation("RoomMessagesSent", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("chat_room_messages")
 }
 
 model GithubProject {
@@ -120,29 +148,16 @@ model Experience {
 }
 
 model Review {
-  id        Int      @id @default(autoincrement())
-  projectId Int      @map("project_id")
-  reviewerId Int     @map("reviewer_id")
-  revieweeId Int     @map("reviewee_id")
-  rating    Int
-  message   String?
-  createdAt DateTime @default(now()) @map("created_at")
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  reviewer  User     @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
-  reviewee  User     @relation("Reviewee", fields: [revieweeId], references: [id], onDelete: Cascade)
+  id         Int      @id @default(autoincrement())
+  projectId  Int      @map("project_id")
+  reviewerId Int      @map("reviewer_id")
+  revieweeId Int      @map("reviewee_id")
+  rating     Int
+  message    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reviewer   User     @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewee   User     @relation("Reviewee", fields: [revieweeId], references: [id], onDelete: Cascade)
 
   @@map("reviews")
-}
-
-model ChatMessage {
-  id         Int      @id @default(autoincrement())
-  fromUserId Int      @map("from_user_id")
-  toUserId   Int      @map("to_user_id")
-  senderName String   @map("sender_name")
-  text       String
-  createdAt  DateTime @default(now()) @map("created_at")
-  sender     User     @relation("Sender", fields: [fromUserId], references: [id], onDelete: Cascade)
-  recipient  User     @relation("Recipient", fields: [toUserId], references: [id], onDelete: Cascade)
-
-  @@map("chat_messages")
 }
