@@ -120,7 +120,6 @@ export default function Cadastro() {
   );
 }
 
-// Reutilização dos estilos do Login para consistência total
 const s = {
   page: { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px 16px', backgroundColor: '#0a0a0a' },
   card: { width: '100%', maxWidth: '420px', backgroundColor: '#111', border: '1px solid #1e1e1e', borderRadius: '12px', padding: '40px 36px' },

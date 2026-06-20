@@ -6,7 +6,6 @@ export default function CriarProjeto() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [budget, setBudget] = useState('');
-  // 📆 1. Estado para armazenar a data selecionada no calendário
   const [deliveryTime, setDeliveryTime] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -81,7 +80,7 @@ export default function CriarProjeto() {
             />
           </div>
 
-          {/* 📆 3. Campo de Calendário Integrado */}
+          {/* 3. Campo de Calendário Integrado */}
           <div style={{ ...styles.inputGroup, flex: 1 }}>
             <label style={styles.label}>Prazo Limite de Entrega:</label>
             <input 

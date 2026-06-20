@@ -3,7 +3,6 @@ const router = express.Router();
 const prisma = require('../config/database');
 const authMiddleware = require('../middlewares/auth');
 
-// Criar proposta
 router.post('/', authMiddleware, async (req, res, next) => {
   try {
     const { projectId, totalAmount, coverText, milestones } = req.body;
@@ -26,7 +25,6 @@ router.post('/', authMiddleware, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Listar propostas do projeto para o cliente
 router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
   try {
     const projectId = Number(req.params.projectId);
@@ -45,7 +43,6 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Listar minhas propostas (freelancer)
 router.get('/minhas', authMiddleware, async (req, res, next) => {
   try {
     const proposals = await prisma.proposal.findMany({
@@ -57,7 +54,6 @@ router.get('/minhas', authMiddleware, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Aceitar proposta
 router.post('/:id/accept', authMiddleware, async (req, res, next) => {
   try {
     const proposalId = Number(req.params.id);
@@ -79,19 +75,16 @@ router.post('/:id/accept', authMiddleware, async (req, res, next) => {
         data: { status: 'accepted' }
       });
 
-      // 2. Rejeita todas as outras do mesmo projeto
       await tx.proposal.updateMany({
         where: { projectId: proposal.projectId, id: { not: proposalId } },
         data: { status: 'rejected' }
       });
 
-      // 3. Fecha o projeto para novas propostas
       await tx.project.update({
         where: { id: proposal.projectId },
         data: { status: 'in_progress' }
       });
 
-      // 4. Cria os milestones no Kanban
       if (milestones.length > 0) {
         await tx.milestone.createMany({
           data: milestones.map(m => ({

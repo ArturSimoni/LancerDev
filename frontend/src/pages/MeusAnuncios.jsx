@@ -38,7 +38,6 @@ export default function MeusAnuncios() {
     });
   }
 
-  // CORREÇÃO BUG 2: removido e.preventDefault() (não é mais um form HTML)
   async function handleSaveEdit() {
     try {
       const response = await api.put(`/projects/${editingProject.id}`, formData);
@@ -61,7 +60,6 @@ export default function MeusAnuncios() {
                   <p style={s.cardDesc}>{p.description} | Prazo: {p.deliveryTime}</p>
                 </div>
                 <div style={s.actions}>
-                  {/* CORREÇÃO BUG 3: rota correta com projectId para o GerenciarPropostas */}
                   <button onClick={() => navigate(`/projetos/${p.id}/propostas`)} style={s.viewBtn}>Ver Propostas</button>
                   <button onClick={() => handleOpenEdit(p)} style={s.editBtn}>Editar</button>
                   <button onClick={() => handleDelete(p.id)} style={s.deleteBtn}>Excluir</button>

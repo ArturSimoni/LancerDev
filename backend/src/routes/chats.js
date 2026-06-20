@@ -3,7 +3,6 @@ const router = express.Router();
 const prisma = require('../config/database');
 const authMiddleware = require('../middlewares/auth');
 
-// Lista conversas do usuário logado
 router.get('/conversations', authMiddleware, async (req, res, next) => {
   try {
     const chats = await prisma.chat.findMany({
@@ -33,7 +32,6 @@ router.get('/conversations', authMiddleware, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Histórico de mensagens de uma sala
 router.get('/messages/:chatId', authMiddleware, async (req, res, next) => {
   try {
     const chatId = Number(req.params.chatId);

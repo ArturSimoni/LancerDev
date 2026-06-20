@@ -22,7 +22,6 @@ export default function VerPropostas() {
     fetchProposals();
   }, [projectId]);
 
-  // CORRIGIDO: envia milestones junto para o backend criar no Kanban
   async function handleAccept(proposalId, proposalMilestones) {
     if (!window.confirm('Deseja fechar contrato com este desenvolvedor?')) return;
     setAccepting(proposalId);
@@ -94,7 +93,6 @@ export default function VerPropostas() {
               {p.status === 'pending' && (
                 <button
                   disabled={accepting !== null}
-                  // CORRIGIDO: passa p.milestones para o handleAccept
                   onClick={() => handleAccept(p.id, p.milestones)}
                   style={{
                     ...s.btnAccept,

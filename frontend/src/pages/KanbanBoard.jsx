@@ -14,7 +14,6 @@ export default function KanbanBoard({ projectId }) {
 
   async function loadKanbanData() {
     try {
-      // CORRIGIDO: rota correta sem o prefixo /projects
       const response = await api.get(`/milestones/projeto/${projectId}`);
       setMilestones(response.data);
     } catch (error) {
@@ -30,7 +29,6 @@ export default function KanbanBoard({ projectId }) {
 
   async function moveCard(milestoneId, newStatus) {
     try {
-      // CORRIGIDO: rota correta sem o prefixo /projects
       await api.patch(`/milestones/${milestoneId}/status`, { status: newStatus });
       setMilestones(prev =>
         prev.map(m => m.id === milestoneId ? { ...m, status: newStatus } : m)

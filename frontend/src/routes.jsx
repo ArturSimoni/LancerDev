@@ -11,7 +11,6 @@ import MinhasPropostas from "./pages/MinhasPropostas";
 import Chat from "./pages/Chat";
 import DetalhesProjeto from "./pages/DetalhesProjeto";
 import VerPropostas from "./pages/VerPropostas";
-// REMOVIDO: GerenciarPropostas (substituído por VerPropostas)
 
 const ProtectedRoute = ({ children, isPrivate }) => {
   const token = localStorage.getItem('@LancerDev:token');
@@ -41,11 +40,7 @@ export const router = createBrowserRouter([
       { path: "projetos",      element: <ProtectedRoute isPrivate={true}><BuscarProjetos /></ProtectedRoute> },
       { path: "propostas",     element: <ProtectedRoute isPrivate={true}><MinhasPropostas /></ProtectedRoute> },
       { path: "chat",          element: <ProtectedRoute isPrivate={true}><Chat /></ProtectedRoute> },
-
-      // Detalhe do projeto para o freelancer enviar proposta
       { path: "projeto/:id",   element: <ProtectedRoute isPrivate={true}><DetalhesProjeto /></ProtectedRoute> },
-
-      // CORRIGIDO: uma única rota para ver/aceitar propostas (sem duplicata)
       { path: "projetos/:projectId/propostas", element: <ProtectedRoute isPrivate={true}><VerPropostas /></ProtectedRoute> },
 
       { path: "*", element: <Navigate to="/" replace /> },

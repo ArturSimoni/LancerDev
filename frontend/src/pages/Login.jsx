@@ -149,14 +149,12 @@ const s = {
     padding: '40px 36px',
   },
 
-  // Header
   cardHeader: { textAlign: 'center', marginBottom: '32px' },
   logoLink: { fontSize: '22px', fontWeight: '700', color: '#fff', textDecoration: 'none', display: 'inline-block', marginBottom: '24px' },
   logoAccent: { color: '#ff6b00' },
   title: { fontSize: '22px', fontWeight: '700', margin: '0 0 6px', color: '#fff' },
   subtitle: { fontSize: '14px', color: '#666', margin: 0 },
 
-  // Error
   errorBox: {
     display: 'flex', alignItems: 'center', gap: '8px',
     backgroundColor: 'rgba(255,51,51,0.08)',
@@ -167,7 +165,6 @@ const s = {
   },
   errorIcon: { fontSize: '14px', flexShrink: 0 },
 
-  // Form
   form: { display: 'flex', flexDirection: 'column', gap: '20px' },
   fieldGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
   labelRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
@@ -185,7 +182,6 @@ const s = {
     transition: 'border-color 0.15s',
   },
 
-  // Password toggle
   passwordWrapper: { position: 'relative' },
   eyeBtn: {
     position: 'absolute', right: '12px', top: '50%',
@@ -195,7 +191,6 @@ const s = {
     opacity: 0.5,
   },
 
-  // Submit
   submitBtn: {
     width: '100%', padding: '13px',
     backgroundColor: '#ff6b00', color: '#000',
@@ -219,7 +214,6 @@ const s = {
   footerLink: { color: '#ff6b00', textDecoration: 'none', fontWeight: '600' },
 };
 
-// Injeta keyframe do spinner globalmente (uma vez)
 if (typeof document !== 'undefined' && !document.getElementById('ld-spin')) {
   const st = document.createElement('style');
   st.id = 'ld-spin';

@@ -21,7 +21,6 @@ export default function Chat() {
       auth: { token: localStorage.getItem('@LancerDev:token') }
     });
 
-    // CORRIGIDO: usa activeRoomRef para evitar closure desatualizada
     socketRef.current.on('receive_message', (message) => {
       if (!activeRoomRef.current) return;
       if (Number(message.chatId) !== Number(activeRoomRef.current.id)) return;
@@ -47,7 +46,6 @@ export default function Chat() {
   useEffect(() => {
     if (!activeRoom) return;
 
-    // ADICIONADO: mantém ref sincronizada com o estado
     activeRoomRef.current = activeRoom;
 
     socketRef.current.emit('join_room', { roomId: activeRoom.id });
@@ -113,7 +111,6 @@ export default function Chat() {
 
             <div style={styles.messageBox}>
               {messages.map((msg) => {
-                // CORRIGIDO: compara como número pois o banco retorna Int
                 const isMe = Number(msg.senderId) === Number(user?.id);
                 return (
                   <div
@@ -150,7 +147,7 @@ export default function Chat() {
           </>
         ) : (
           <div style={styles.noActiveChat}>
-            <p>💬 Selecione uma conversa ao lado para iniciar o bate-papo.</p>
+            <p>Selecione uma conversa ao lado para iniciar o bate-papo.</p>
           </div>
         )}
       </div>

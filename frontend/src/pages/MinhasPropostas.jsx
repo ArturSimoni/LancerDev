@@ -59,7 +59,6 @@ export default function MinhasPropostas() {
                                     {/* Ajustado de prop.created_at para prop.createdAt */}
                                     <p style={s.date}><strong>Enviada em:</strong> {new Date(prop.createdAt).toLocaleDateString('pt-BR')}</p>
                                 </div>
-                                {/* Ajustado de prop.project_id para prop.projectId */}
                                 <Link to={`/projeto/${prop.projectId}`} style={s.link}>Ver Projeto Original</Link>
                             </div>
                         );

@@ -1,16 +1,15 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom'; // ← ADICIONADO
+import { useParams } from 'react-router-dom';
 import api from '../services/api';
 
-export default function GerenciarPropostas() { // ← removido props
-  const { projectId } = useParams(); // ← pega da URL, não de prop
+export default function GerenciarPropostas() {
+  const { projectId } = useParams(); 
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [accepting, setAccepting] = useState(null);
 
   async function loadProposals() {
     try {
-      // CORREÇÃO BUG 2: rota correta bate com o backend (/propostas/projeto/:id)
       const response = await api.get(`/propostas/projeto/${projectId}`);
       setProposals(response.data);
     } catch (error) {

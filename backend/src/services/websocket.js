@@ -1,6 +1,5 @@
 const { WebSocketServer } = require('ws');
 
-// Mapa para rastrear os usuários online { userId: socket }
 const connectedUsers = new Map();
 
 const initWebSocket = (server, prisma) => {

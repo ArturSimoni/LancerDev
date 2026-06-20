@@ -3,7 +3,6 @@ const router = express.Router();
 const prisma = require('../config/database');
 const authMiddleware = require('../middlewares/auth');
 
-// Criar projeto
 router.post('/', authMiddleware, async (req, res, next) => {
   try {
     const { title, description, budget, deliveryTime } = req.body;
@@ -24,7 +23,6 @@ router.post('/', authMiddleware, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Listar vitrine
 router.get('/vitrine', async (req, res, next) => {
   try {
     const projects = await prisma.project.findMany({
@@ -36,7 +34,6 @@ router.get('/vitrine', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Listar MEUS ANÚNCIOS (Apenas uma vez no arquivo!)
 router.get('/meus-anuncios', authMiddleware, async (req, res, next) => {
   try {
     console.log("DEBUG: Buscando anúncios para o cliente ID:", req.userId);
@@ -48,7 +45,6 @@ router.get('/meus-anuncios', authMiddleware, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Buscar detalhes de projeto por ID
 router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -61,7 +57,6 @@ router.get('/:id', async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Editar projeto
 router.put('/:id', authMiddleware, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -78,7 +73,6 @@ router.put('/:id', authMiddleware, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
-// Deletar projeto
 router.delete('/:id', authMiddleware, async (req, res, next) => {
   try {
     const { id } = req.params;

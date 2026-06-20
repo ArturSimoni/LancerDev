@@ -15,13 +15,11 @@ export default function BuscarProjetos() {
 
   useEffect(() => {
     if (id) {
-      // Modo detalhe: carrega projeto específico
       api.get(`/projects/${id}`)
         .then(r => setProject(r.data))
         .catch(console.error)
         .finally(() => setLoading(false));
     } else {
-      // Modo vitrine: carrega todos os projetos abertos
       api.get('/projects/vitrine')
         .then(r => setProjects(r.data))
         .catch(console.error)
@@ -47,7 +45,6 @@ export default function BuscarProjetos() {
       return;
     }
     try {
-      // CORREÇÃO: rota correta é /propostas, não /projects/propostas
       await api.post('/propostas', { projectId: id, coverText, totalAmount, milestones });
       alert('Proposta enviada com sucesso!');
       navigate('/propostas');
@@ -58,7 +55,6 @@ export default function BuscarProjetos() {
 
   if (loading) return <p style={{ color: '#fff', padding: '20px' }}>Carregando...</p>;
 
-  // VITRINE — sem id na URL
   if (!id) {
     return (
       <div style={styles.container}>
@@ -76,7 +72,6 @@ export default function BuscarProjetos() {
                     Orçamento: R$ {Number(p.budget).toLocaleString('pt-BR')}
                   </span>
                 </div>
-                {/* CORREÇÃO: navega para /projeto/:id (singular) conforme o router */}
                 <Link to={`/projeto/${p.id}`} style={styles.viewBtn}>Ver Detalhes →</Link>
               </div>
             ))}
@@ -86,13 +81,11 @@ export default function BuscarProjetos() {
     );
   }
 
-  // O dono do projeto é redirecionado para ver as propostas
   if (project && project.clientId === usuarioLogadoId) {
     navigate(`/projetos/${id}/propostas`);
     return null;
   }
 
-  // FORMULÁRIO DE PROPOSTA para freelancer
   return (
     <div style={styles.container}>
       <h2 style={styles.sectionTitle}>Propor Cronograma de Desenvolvimento</h2>

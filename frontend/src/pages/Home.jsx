@@ -197,20 +197,17 @@ const s = {
     statValue: { fontSize: '22px', fontWeight: '700', color: '#fff' },
     statLabel: { fontSize: '12px', color: '#666', letterSpacing: '0.05em' },
 
-    // Sections
     section: { marginBottom: '72px' },
     sectionHeader: { marginBottom: '36px' },
     sectionTitle: { fontSize: '26px', fontWeight: '700', margin: '0 0 8px', borderLeft: '3px solid #ff6b00', paddingLeft: '12px' },
     sectionSub: { fontSize: '15px', color: '#777', margin: '0', paddingLeft: '15px' },
 
-    // Steps
     stepsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '20px' },
     stepCard: { backgroundColor: '#111', border: '1px solid #222', borderRadius: '10px', padding: '28px 24px' },
     stepIcon: { fontSize: '28px', display: 'block', marginBottom: '16px' },
     stepTitle: { fontSize: '15px', fontWeight: '600', margin: '0 0 8px' },
     stepDesc: { fontSize: '13px', color: '#777', lineHeight: '1.6', margin: 0 },
 
-    // Project cards
     grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' },
     card: { backgroundColor: '#111', border: '1px solid #222', borderRadius: '10px', padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', transition: 'border-color 0.2s' },
     cardTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' },
@@ -222,12 +219,10 @@ const s = {
     clientName: { fontSize: '12px', color: '#555' },
     btnOutline: { backgroundColor: 'transparent', border: '1px solid #ff6b00', color: '#ff6b00', padding: '7px 14px', borderRadius: '5px', cursor: 'pointer', fontWeight: '500', fontSize: '13px', transition: 'all 0.2s' },
 
-    // Empty state
     emptyState: { textAlign: 'center', padding: '60px 20px', backgroundColor: '#111', borderRadius: '10px', border: '1px solid #222' },
     emptyIcon: { fontSize: '40px', display: 'block', marginBottom: '16px' },
     emptyText: { color: '#666', marginBottom: '24px', fontSize: '15px' },
 
-    // CTA Banner
     ctaBanner: { backgroundColor: '#111', border: '1px solid #222', borderRadius: '12px', padding: '60px 40px', textAlign: 'center' },
     ctaTitle: { fontSize: '32px', fontWeight: '700', margin: '0 0 12px' },
     ctaSub: { color: '#777', fontSize: '16px', margin: '0 0 32px' },

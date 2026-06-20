@@ -15,7 +15,7 @@ const styles = {
   footer: {
     backgroundColor: '#0a0a0a',
     padding: '20px 0',
-    marginTop: 'auto', // Faz o footer grudar embaixo se a página tiver pouco conteúdo
+    marginTop: 'auto', 
     borderTop: '1px solid #222',
     textAlign: 'center',
   },
