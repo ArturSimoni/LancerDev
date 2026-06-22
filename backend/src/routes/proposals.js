@@ -3,6 +3,7 @@ const router = express.Router();
 const prisma = require('../config/database');
 const authMiddleware = require('../middlewares/auth');
 
+// Criar proposta — salva milestones como JSON
 router.post('/', authMiddleware, async (req, res, next) => {
   try {
     const { projectId, totalAmount, coverText, milestones } = req.body;
@@ -15,16 +16,15 @@ router.post('/', authMiddleware, async (req, res, next) => {
         freelancerId: req.userId,
         amount: Number(totalAmount),
         coverText: coverText || null,
+        milestonesData: milestones || [],  // CORRIGIDO: salva no banco
         status: 'pending',
       }
     });
-    return res.status(201).json({
-      message: 'Proposta enviada!',
-      proposal: { ...proposal, milestones: milestones || [] }
-    });
+    return res.status(201).json({ message: 'Proposta enviada!', proposal });
   } catch (error) { next(error); }
 });
 
+// Listar propostas do projeto para o cliente
 router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
   try {
     const projectId = Number(req.params.projectId);
@@ -39,10 +39,11 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    return res.json(proposals);
+    return res.json(proposals); // milestonesData já vem junto
   } catch (error) { next(error); }
 });
 
+// Listar minhas propostas (freelancer)
 router.get('/minhas', authMiddleware, async (req, res, next) => {
   try {
     const proposals = await prisma.proposal.findMany({
@@ -54,10 +55,10 @@ router.get('/minhas', authMiddleware, async (req, res, next) => {
   } catch (error) { next(error); }
 });
 
+// Aceitar proposta — usa milestones salvos na própria proposta
 router.post('/:id/accept', authMiddleware, async (req, res, next) => {
   try {
     const proposalId = Number(req.params.id);
-    const milestones = req.body?.milestones || [];
 
     const proposal = await prisma.proposal.findUnique({
       where: { id: proposalId },
@@ -68,8 +69,10 @@ router.post('/:id/accept', authMiddleware, async (req, res, next) => {
     if (proposal.project.clientId !== req.userId) return res.status(403).json({ message: 'Ação não autorizada.' });
     if (proposal.project.status !== 'open') return res.status(400).json({ message: 'Este projeto já possui contrato fechado.' });
 
+    // CORRIGIDO: pega os milestones do banco, não do body
+    const milestones = Array.isArray(proposal.milestonesData) ? proposal.milestonesData : [];
+
     await prisma.$transaction(async (tx) => {
-      // 1. Aceita esta proposta
       await tx.proposal.update({
         where: { id: proposalId },
         data: { status: 'accepted' }
@@ -97,7 +100,6 @@ router.post('/:id/accept', authMiddleware, async (req, res, next) => {
         });
       }
 
-      // 5. Cria a sala de chat entre cliente e freelancer
       await tx.chat.create({
         data: {
           projectId: proposal.projectId,

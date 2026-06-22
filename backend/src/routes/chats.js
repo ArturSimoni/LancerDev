@@ -20,7 +20,6 @@ router.get('/conversations', authMiddleware, async (req, res, next) => {
       orderBy: { createdAt: 'desc' }
     });
 
-    // Formata para o frontend saber quem é o "outro participante"
     const formatted = chats.map(chat => ({
       id: chat.id,
       project: chat.project,
@@ -36,7 +35,6 @@ router.get('/messages/:chatId', authMiddleware, async (req, res, next) => {
   try {
     const chatId = Number(req.params.chatId);
 
-    // Verifica se o usuário pertence a essa sala
     const chat = await prisma.chat.findFirst({
       where: {
         id: chatId,

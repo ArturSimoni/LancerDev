@@ -9,6 +9,7 @@ const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projects');
 const proposalRoutes = require('./routes/proposals');
 const chatRoutes = require('./routes/chats');
+const milestoneRoutes = require('./routes/milestones');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +21,7 @@ app.use('/auth', authRoutes);
 app.use('/projects', projectRoutes);
 app.use('/propostas', proposalRoutes);
 app.use('/chats', chatRoutes);
+app.use('/milestones', milestoneRoutes);
 
 const io = new Server(server, { cors: { origin: 'http://localhost:5173' } });
 

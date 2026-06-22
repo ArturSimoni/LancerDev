@@ -36,9 +36,25 @@ router.get('/vitrine', async (req, res, next) => {
 
 router.get('/meus-anuncios', authMiddleware, async (req, res, next) => {
   try {
-    console.log("DEBUG: Buscando anúncios para o cliente ID:", req.userId);
     const projects = await prisma.project.findMany({
       where: { clientId: req.userId },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(projects);
+  } catch (error) { next(error); }
+});
+
+// ATENÇÃO: /ativos DEVE vir antes de /:id
+router.get('/ativos', authMiddleware, async (req, res, next) => {
+  try {
+    const projects = await prisma.project.findMany({
+      where: {
+        status: 'in_progress',
+        OR: [
+          { clientId: req.userId },
+          { proposals: { some: { freelancerId: req.userId, status: 'accepted' } } }
+        ]
+      },
       orderBy: { createdAt: 'desc' }
     });
     res.json(projects);

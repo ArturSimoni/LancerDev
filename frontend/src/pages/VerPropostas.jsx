@@ -22,13 +22,12 @@ export default function VerPropostas() {
     fetchProposals();
   }, [projectId]);
 
-  async function handleAccept(proposalId, proposalMilestones) {
+  // CORRIGIDO: não envia milestones — o backend busca do banco
+  async function handleAccept(proposalId) {
     if (!window.confirm('Deseja fechar contrato com este desenvolvedor?')) return;
     setAccepting(proposalId);
     try {
-      await api.post(`/propostas/${proposalId}/accept`, {
-        milestones: proposalMilestones || []
-      });
+      await api.post(`/propostas/${proposalId}/accept`);
       setProposals(prev =>
         prev.map(p =>
           p.id === proposalId
@@ -76,10 +75,11 @@ export default function VerPropostas() {
               </p>
               <p style={s.text}>{p.coverText}</p>
 
-              {p.milestones?.length > 0 && (
+              {/* CORRIGIDO: usa milestonesData em vez de milestones */}
+              {p.milestonesData?.length > 0 && (
                 <div style={s.milestonesBox}>
                   <p style={s.milestonesTitle}>Etapas propostas:</p>
-                  {p.milestones.map((m, i) => (
+                  {p.milestonesData.map((m, i) => (
                     <div key={i} style={s.milestoneRow}>
                       <span>{m.title}</span>
                       <strong style={{ color: '#00c851' }}>
@@ -93,7 +93,7 @@ export default function VerPropostas() {
               {p.status === 'pending' && (
                 <button
                   disabled={accepting !== null}
-                  onClick={() => handleAccept(p.id, p.milestones)}
+                  onClick={() => handleAccept(p.id)}
                   style={{
                     ...s.btnAccept,
                     opacity: accepting === p.id ? 0.6 : 1,

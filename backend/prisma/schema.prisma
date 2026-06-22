@@ -30,15 +30,15 @@ model User {
 }
 
 model Project {
-  id           Int        @id @default(autoincrement())
-  clientId     Int        @map("client_id")
+  id           Int         @id @default(autoincrement())
+  clientId     Int         @map("client_id")
   title        String
   description  String
   budget       Decimal
-  deliveryTime String?    @map("delivery_time")
-  status       String     @default("open")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  client       User       @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
+  deliveryTime String?     @map("delivery_time")
+  status       String      @default("open")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  client       User        @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
   proposals    Proposal[]
   milestones   Milestone[]
   payments     Payment[]
@@ -49,15 +49,16 @@ model Project {
 }
 
 model Proposal {
-  id           Int      @id @default(autoincrement())
-  projectId    Int      @map("project_id")
-  freelancerId Int      @map("freelancer_id")
-  amount       Decimal
-  coverText    String?  @map("cover_text")
-  status       String   @default("pending")
-  createdAt    DateTime @default(now()) @map("created_at")
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  freelancer   User     @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  id             Int      @id @default(autoincrement())
+  projectId      Int      @map("project_id")
+  freelancerId   Int      @map("freelancer_id")
+  amount         Decimal
+  coverText      String?  @map("cover_text")
+  milestonesData Json     @default("[]") @map("milestones_data")
+  status         String   @default("pending")
+  createdAt      DateTime @default(now()) @map("created_at")
+  project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  freelancer     User     @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
 
   @@map("proposals")
 }
