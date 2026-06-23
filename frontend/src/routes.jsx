@@ -11,6 +11,7 @@ import MinhasPropostas from "./pages/MinhasPropostas";
 import Chat from "./pages/Chat";
 import DetalhesProjeto from "./pages/DetalhesProjeto";
 import VerPropostas from "./pages/VerPropostas";
+import Perfil from "./pages/Perfil";
 
 const ProtectedRoute = ({ children, isPrivate }) => {
   const token = localStorage.getItem('@LancerDev:token');
@@ -42,7 +43,8 @@ export const router = createBrowserRouter([
       { path: "chat",          element: <ProtectedRoute isPrivate={true}><Chat /></ProtectedRoute> },
       { path: "projeto/:id",   element: <ProtectedRoute isPrivate={true}><DetalhesProjeto /></ProtectedRoute> },
       { path: "projetos/:projectId/propostas", element: <ProtectedRoute isPrivate={true}><VerPropostas /></ProtectedRoute> },
-
+      { path: "perfil",        element: <ProtectedRoute isPrivate={true}><Perfil /></ProtectedRoute> },
+      { path: "perfil/:id",    element: <ProtectedRoute isPrivate={true}><Perfil /></ProtectedRoute> },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

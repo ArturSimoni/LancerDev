@@ -24,7 +24,7 @@ function getAuthState() {
 export default function Navbar() {
   const navigate  = useNavigate();
   const location  = useLocation();
-  const [state, setState]     = useState(getAuthState);
+  const [state, setState]       = useState(getAuthState);
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -33,7 +33,6 @@ export default function Navbar() {
     return () => window.removeEventListener('authChange', sync);
   }, []);
 
-  // Fecha menu mobile ao navegar
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
   function handleLogout() {
@@ -71,10 +70,15 @@ export default function Navbar() {
         <div style={s.authArea}>
           {state.auth ? (
             <div style={s.userMenu}>
-              <div style={s.avatar}>
-                {state.user?.name?.charAt(0).toUpperCase()}
-              </div>
-              <span style={s.username}>{state.user?.name?.split(' ')[0]}</span>
+              {/* ADICIONADO: avatar clicável que vai para o perfil */}
+              <Link to={`/perfil/${state.user?.id}`} style={s.avatarLink}>
+                <div style={s.avatar}>
+                  {state.user?.name?.charAt(0).toUpperCase()}
+                </div>
+              </Link>
+              <Link to={`/perfil/${state.user?.id}`} style={s.usernameLink}>
+                {state.user?.name?.split(' ')[0]}
+              </Link>
               <div style={s.divider} />
               <button onClick={handleLogout} style={s.logoutBtn}
                 onMouseEnter={e => e.target.style.color = '#ff6b00'}
@@ -115,6 +119,12 @@ export default function Navbar() {
           {state.auth && links.map(({ to, label }) => (
             <Link key={to} to={to} style={s.mobileLink}>{label}</Link>
           ))}
+          {/* ADICIONADO: link de perfil no mobile */}
+          {state.auth && (
+            <Link to={`/perfil/${state.user?.id}`} style={s.mobileLink}>
+              Meu Perfil
+            </Link>
+          )}
           <div style={s.mobileDivider} />
           {state.auth ? (
             <button onClick={handleLogout} style={s.mobileLogout}>Sair</button>
@@ -149,73 +159,25 @@ const s = {
     justifyContent: 'space-between',
     gap: '24px',
   },
-
-  // Logo
   logo: { fontSize: '20px', fontWeight: '700', color: '#fff', textDecoration: 'none', flexShrink: 0, letterSpacing: '-0.01em' },
   logoAccent: { color: '#ff6b00' },
-
-  // Nav
   nav: { display: 'flex', gap: '4px', alignItems: 'center', flex: 1 },
-  link: {
-    color: '#888', textDecoration: 'none', fontSize: '13px', fontWeight: '500',
-    padding: '6px 10px', borderRadius: '6px', transition: 'color 0.15s',
-  },
-  linkActive: {
-    color: '#fff', textDecoration: 'none', fontSize: '13px', fontWeight: '600',
-    padding: '6px 10px', borderRadius: '6px', backgroundColor: '#1a1a1a',
-  },
-
-  // Auth area
+  link: { color: '#888', textDecoration: 'none', fontSize: '13px', fontWeight: '500', padding: '6px 10px', borderRadius: '6px' },
+  linkActive: { color: '#fff', textDecoration: 'none', fontSize: '13px', fontWeight: '600', padding: '6px 10px', borderRadius: '6px', backgroundColor: '#1a1a1a' },
   authArea: { display: 'flex', alignItems: 'center', flexShrink: 0 },
   authButtons: { display: 'flex', gap: '8px', alignItems: 'center' },
   loginBtn: { color: '#aaa', textDecoration: 'none', fontSize: '13px', fontWeight: '500', padding: '6px 12px' },
-  registerBtn: {
-    backgroundColor: '#ff6b00', color: '#000', padding: '7px 16px',
-    borderRadius: '6px', textDecoration: 'none', fontSize: '13px',
-    fontWeight: '700', transition: 'background-color 0.15s', display: 'inline-block',
-  },
-
-  // User menu
+  registerBtn: { backgroundColor: '#ff6b00', color: '#000', padding: '7px 16px', borderRadius: '6px', textDecoration: 'none', fontSize: '13px', fontWeight: '700', display: 'inline-block' },
   userMenu: { display: 'flex', alignItems: 'center', gap: '10px' },
-  avatar: {
-    width: '30px', height: '30px', borderRadius: '50%',
-    backgroundColor: '#ff6b00', color: '#000',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '13px', fontWeight: '700', flexShrink: 0,
-  },
-  username: { color: '#ccc', fontSize: '13px', fontWeight: '500' },
+  avatarLink: { textDecoration: 'none' },
+  avatar: { width: '30px', height: '30px', borderRadius: '50%', backgroundColor: '#ff6b00', color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '700', flexShrink: 0 },
+  usernameLink: { color: '#ccc', fontSize: '13px', fontWeight: '500', textDecoration: 'none' },
   divider: { width: '1px', height: '16px', backgroundColor: '#2a2a2a' },
-  logoutBtn: {
-    background: 'none', border: 'none', color: '#666',
-    fontSize: '13px', cursor: 'pointer', padding: '4px 0',
-    transition: 'color 0.15s',
-  },
-
-  // Hamburger
-  hamburger: {
-    display: 'none', flexDirection: 'column', gap: '4px',
-    background: 'none', border: 'none', cursor: 'pointer',
-    padding: '4px',
-    '@media(maxWidth:768px)': { display: 'flex' },
-  },
-  bar: {
-    width: '20px', height: '2px', backgroundColor: '#fff',
-    display: 'block', borderRadius: '2px',
-    transition: 'transform 0.2s, opacity 0.2s',
-  },
-
-  // Mobile menu
-  mobileMenu: {
-    backgroundColor: '#0d0d0d', borderTop: '1px solid #1e1e1e',
-    padding: '12px 20px 20px', display: 'flex', flexDirection: 'column', gap: '2px',
-  },
-  mobileLink: {
-    color: '#aaa', textDecoration: 'none', fontSize: '15px',
-    padding: '12px 0', borderBottom: '1px solid #141414', display: 'block',
-  },
+  logoutBtn: { background: 'none', border: 'none', color: '#666', fontSize: '13px', cursor: 'pointer', padding: '4px 0' },
+  hamburger: { display: 'none', flexDirection: 'column', gap: '4px', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' },
+  bar: { width: '20px', height: '2px', backgroundColor: '#fff', display: 'block', borderRadius: '2px', transition: 'transform 0.2s, opacity 0.2s' },
+  mobileMenu: { backgroundColor: '#0d0d0d', borderTop: '1px solid #1e1e1e', padding: '12px 20px 20px', display: 'flex', flexDirection: 'column', gap: '2px' },
+  mobileLink: { color: '#aaa', textDecoration: 'none', fontSize: '15px', padding: '12px 0', borderBottom: '1px solid #141414', display: 'block' },
   mobileDivider: { height: '1px', backgroundColor: '#1e1e1e', margin: '8px 0' },
-  mobileLogout: {
-    background: 'none', border: 'none', color: '#666',
-    fontSize: '15px', cursor: 'pointer', padding: '12px 0', textAlign: 'left',
-  },
+  mobileLogout: { background: 'none', border: 'none', color: '#666', fontSize: '15px', cursor: 'pointer', padding: '12px 0', textAlign: 'left' },
 };

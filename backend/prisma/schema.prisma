@@ -25,8 +25,44 @@ model User {
   clientChats      Chat[]            @relation("ClientChats")
   freelancerChats  Chat[]            @relation("FreelancerChats")
   roomMessages     ChatRoomMessage[] @relation("RoomMessagesSent")
+  clientProfile    ClientProfile?
+  freelancerProfile FreelancerProfile?
+  notifications    Notification[]
 
   @@map("users")
+}
+
+model ClientProfile {
+  userId             Int     @id @map("user_id")
+  companyName        String? @map("company_name")
+  companyWebsite     String? @map("company_website")
+  companyDescription String? @map("company_description")
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("client_profiles")
+}
+
+model FreelancerProfile {
+  userId     Int      @id @map("user_id")
+  bio        String?
+  hourlyRate Decimal? @map("hourly_rate")
+  resumeUrl  String?  @map("resume_url")
+  websiteUrl String?  @map("website_url")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("freelancer_profiles")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  type      String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
 }
 
 model Project {
