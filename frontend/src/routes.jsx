@@ -12,6 +12,8 @@ import Chat from "./pages/Chat";
 import DetalhesProjeto from "./pages/DetalhesProjeto";
 import VerPropostas from "./pages/VerPropostas";
 import Perfil from "./pages/Perfil";
+import PagamentoSucesso from "./pages/PagamentoSucesso";
+import PagamentoFalha from "./pages/PagamentoFalha";
 
 const ProtectedRoute = ({ children, isPrivate }) => {
   const token = localStorage.getItem('@LancerDev:token');
@@ -46,6 +48,9 @@ export const router = createBrowserRouter([
       { path: "perfil",        element: <ProtectedRoute isPrivate={true}><Perfil /></ProtectedRoute> },
       { path: "perfil/:id",    element: <ProtectedRoute isPrivate={true}><Perfil /></ProtectedRoute> },
       { path: "*", element: <Navigate to="/" replace /> },
+      { path: "pagamento/sucesso", element: <ProtectedRoute isPrivate={true}><PagamentoSucesso /></ProtectedRoute> },
+      { path: "pagamento/falha",   element: <ProtectedRoute isPrivate={true}><PagamentoFalha /></ProtectedRoute> },
+      { path: "pagamento/pendente",element: <ProtectedRoute isPrivate={true}><PagamentoSucesso /></ProtectedRoute> },
     ],
   },
 ]);

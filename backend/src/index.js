@@ -1,4 +1,5 @@
 require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
@@ -11,11 +12,15 @@ const proposalRoutes = require('./routes/proposals');
 const chatRoutes = require('./routes/chats');
 const milestoneRoutes = require('./routes/milestones');
 const profileRoutes = require('./routes/profile');
+const paymentsRoutes = require('./routes/payments');
 
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(cors({
+  origin: 'http://localhost:5173'
+}));
+
 app.use(express.json());
 
 app.use('/auth', authRoutes);
@@ -24,11 +29,16 @@ app.use('/propostas', proposalRoutes);
 app.use('/chats', chatRoutes);
 app.use('/milestones', milestoneRoutes);
 app.use('/perfil', profileRoutes);
+app.use('/payments', paymentsRoutes);
 
-const io = new Server(server, { cors: { origin: 'http://localhost:5173' } });
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:5173'
+  }
+});
 
 io.on('connection', (socket) => {
-  console.log(`⚡ Conectado: ${socket.id}`);
+  console.log(`Conectado: ${socket.id}`);
 
   socket.on('join_room', (data) => {
     socket.join(`room_${data.roomId}`);
@@ -43,6 +53,7 @@ io.on('connection', (socket) => {
           text: data.text
         }
       });
+
       io.to(`room_${data.roomId}`).emit('receive_message', {
         id: saved.id,
         chatId: saved.chatId,
@@ -50,13 +61,19 @@ io.on('connection', (socket) => {
         text: saved.text,
         createdAt: saved.createdAt
       });
+
     } catch (error) {
       console.error('Erro ao salvar mensagem:', error);
     }
   });
 
-  socket.on('disconnect', () => console.log(`❌ Desconectado: ${socket.id}`));
+  socket.on('disconnect', () => {
+    console.log(`Desconectado: ${socket.id}`);
+  });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Servidor rodando na porta ${PORT}`));
+
+server.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
