@@ -154,5 +154,142 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
     }
   } catch (error) { next(error); }
 });
+router.get('/publico/:id', async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id);
+
+    if (isNaN(userId)) {
+      return res.status(400).json({ message: 'ID inválido.' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        createdAt: true
+      }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado.' });
+    }
+
+    if (user.role === 'client') {
+      const [clientProfile, projects, reviews] = await Promise.all([
+        prisma.clientProfile.findUnique({
+          where: { userId },
+          select: {
+            companyName: true,
+            companyWebsite: true,
+            companyDescription: true
+          }
+        }),
+        prisma.project.findMany({
+          where: { clientId: userId },
+          select: {
+            id: true,
+            title: true,
+            budget: true,
+            status: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: 'desc' }
+        }),
+        prisma.review.findMany({
+          where: { revieweeId: userId },
+          select: {
+            id: true,
+            rating: true,
+            comment: true,
+            createdAt: true,
+            reviewer: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      ]);
+
+      return res.json({
+        ...user,
+        profile: clientProfile,
+        projects,
+        reviews
+      });
+    }
+
+    if (user.role === 'freelancer') {
+      const [freelancerProfile, experiences, githubProjects, reviews] = await Promise.all([
+        prisma.freelancerProfile.findUnique({
+          where: { userId },
+          select: {
+            bio: true,
+            hourlyRate: true,
+            resumeUrl: true,
+            websiteUrl: true
+          }
+        }),
+        prisma.experience.findMany({
+          where: { userId },
+          select: {
+            id: true,
+            title: true,
+            company: true,
+            startDate: true,
+            endDate: true,
+            description: true
+          },
+          orderBy: { startDate: 'desc' }
+        }),
+        prisma.githubProject.findMany({
+          where: { freelancerId: userId },
+          select: {
+            id: true,
+            repoUrl: true,
+            title: true,
+            description: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: 'desc' }
+        }).catch(() => []),
+        prisma.review.findMany({
+          where: { revieweeId: userId },
+          select: {
+            id: true,
+            rating: true,
+            message: true,
+            createdAt: true,
+            reviewer: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        })
+      ]);
+
+      return res.json({
+        ...user,
+        profile: freelancerProfile,
+        experiences,
+        githubProjects,
+        reviews
+      });
+    }
+
+    return res.status(400).json({
+      message: 'Tipo de usuário inválido.'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 module.exports = router;

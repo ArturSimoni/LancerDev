@@ -1,92 +1,70 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+
+import { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
 
 export default function VerPropostas() {
   const { projectId } = useParams();
+  const navigate = useNavigate();
 
   const [proposals, setProposals] = useState([]);
   const [payment, setPayment] = useState(null);
+  const [canPay, setCanPay] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [loadingPayment, setLoadingPayment] = useState(true);
   const [accepting, setAccepting] = useState(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
 
-  // ============================================================
-  // BUSCAR PROPOSTAS
-  // ============================================================
-
-  async function loadProposals() {
+  const loadProposals = useCallback(async () => {
     try {
       const response = await api.get(
         `/propostas/projeto/${projectId}`
       );
 
       setProposals(response.data);
-
     } catch (error) {
-      console.error(
-        'Erro ao buscar propostas:',
-        error
-      );
+      console.error('Erro ao buscar propostas:', error);
     } finally {
       setLoading(false);
     }
-  }
+  }, [projectId]);
 
-  // ============================================================
-  // BUSCAR PAGAMENTO
-  // ============================================================
-
-  async function loadPayment() {
+  const loadPayment = useCallback(async () => {
     try {
       const response = await api.get(
         `/payments/projeto/${projectId}`
       );
 
-      setPayment(response.data);
+      const result = response.data;
 
-      return response.data;
+      setPayment(result.payment);
+      setCanPay(result.canPay);
 
+      return result.payment;
     } catch (error) {
-      console.error(
-        'Erro ao buscar pagamento:',
-        error
-      );
-
+      console.error('Erro ao buscar pagamento:', error);
       setPayment(null);
-
+      setCanPay(false);
       return null;
-
     } finally {
       setLoadingPayment(false);
     }
-  }
-
-  // ============================================================
-  // CARREGAMENTO INICIAL
-  // ============================================================
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectId) return;
 
     loadProposals();
     loadPayment();
-  }, [projectId]);
-
-  // ============================================================
-  // VERIFICAR PAGAMENTO AUTOMATICAMENTE
-  //
-  // Isso é importante porque o Mercado Pago pode aprovar
-  // o pagamento antes do webhook atualizar o banco.
-  // ============================================================
+  }, [projectId, loadProposals, loadPayment]);
 
   useEffect(() => {
     if (!projectId) return;
 
     let attempts = 0;
     let interval = null;
+    let active = true;
 
     async function checkPayment() {
       try {
@@ -94,35 +72,25 @@ export default function VerPropostas() {
           `/payments/projeto/${projectId}`
         );
 
-        const currentPayment = response.data;
+        if (!active) return;
+
+        const result = response.data;
+        const currentPayment = result.payment;
 
         setPayment(currentPayment);
+        setCanPay(result.canPay);
         setLoadingPayment(false);
 
         attempts++;
 
-        // Pagamento confirmado
-        if (currentPayment?.status === 'paid') {
-          if (interval) {
-            clearInterval(interval);
-          }
-
-          return;
+        if (
+          currentPayment?.status === 'paid' ||
+          attempts >= 15
+        ) {
+          if (interval) clearInterval(interval);
         }
-
-        // Depois de 30 segundos para de consultar
-        // 15 tentativas x 2 segundos
-        if (attempts >= 15) {
-          if (interval) {
-            clearInterval(interval);
-          }
-        }
-
       } catch (error) {
-        console.error(
-          'Erro ao verificar pagamento:',
-          error
-        );
+        console.error('Erro ao verificar pagamento:', error);
 
         attempts++;
 
@@ -132,31 +100,16 @@ export default function VerPropostas() {
       }
     }
 
-    // Consulta imediatamente
     checkPayment();
-
-    // Depois consulta a cada 2 segundos
-    interval = setInterval(
-      checkPayment,
-      2000
-    );
+    interval = setInterval(checkPayment, 2000);
 
     return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
+      active = false;
+      if (interval) clearInterval(interval);
     };
-
   }, [projectId]);
 
-  // ============================================================
-  // ACEITAR PROPOSTA
-  // ============================================================
-
-  async function handleAccept(
-    proposalId,
-    proposalMilestones
-  ) {
+  async function handleAccept(proposalId, proposalMilestones) {
     if (
       !window.confirm(
         'Deseja fechar contrato com este desenvolvedor?'
@@ -175,34 +128,25 @@ export default function VerPropostas() {
         }
       );
 
-      alert(
-        'Contrato fechado com sucesso!'
-      );
+      alert('Contrato fechado com sucesso!');
 
       await loadProposals();
       await loadPayment();
-
     } catch (error) {
-      console.error(
-        'Erro ao aprovar proposta:',
-        error
-      );
+      console.error('Erro ao aprovar proposta:', error);
 
       alert(
         error.response?.data?.message ||
         'Falha ao aceitar proposta.'
       );
-
     } finally {
       setAccepting(null);
     }
   }
 
-  // ============================================================
-  // PAGAMENTO
-  // ============================================================
-
   async function handlePagar() {
+    if (!canPay || paymentLoading) return;
+
     setPaymentLoading(true);
 
     try {
@@ -213,28 +157,29 @@ export default function VerPropostas() {
         }
       );
 
-      // Preferência de sandbox do Mercado Pago
-      window.location.href =
-        response.data.sandboxInitPoint;
+      const checkoutUrl =
+        response.data.sandboxInitPoint ||
+        response.data.initPoint;
 
+      if (!checkoutUrl) {
+        throw new Error(
+          'O Mercado Pago não retornou um endereço de pagamento.'
+        );
+      }
+
+      window.location.href = checkoutUrl;
     } catch (error) {
-      console.error(
-        'Erro ao iniciar pagamento:',
-        error
-      );
+      console.error('Erro ao iniciar pagamento:', error);
 
       alert(
         error.response?.data?.message ||
+        error.message ||
         'Erro ao iniciar pagamento.'
       );
 
       setPaymentLoading(false);
     }
   }
-
-  // ============================================================
-  // LOADING
-  // ============================================================
 
   if (loading) {
     return (
@@ -246,340 +191,283 @@ export default function VerPropostas() {
     );
   }
 
-  // ============================================================
-  // STATUS
-  // ============================================================
-
   const acceptedProposal = proposals.find(
-    proposal =>
-      proposal.status === 'accepted'
+    proposal => proposal.status === 'accepted'
   );
 
-  const paymentPaid =
-    payment?.status === 'paid';
-
-  const paymentPending =
-    payment?.status === 'pending';
-
-  // ============================================================
-  // RENDER
-  // ============================================================
+  const paymentPaid = payment?.status === 'paid';
+  const paymentPending = payment?.status === 'pending';
 
   return (
     <div style={styles.container}>
-
       <h3 style={styles.title}>
         Candidatos & Propostas Recebidas
       </h3>
 
-      {/* ========================================================
-          PAGAMENTO CONFIRMADO
-      ======================================================== */}
+      {acceptedProposal && loadingPayment && (
+        <div style={styles.paymentChecking}>
+          Verificando status do pagamento...
+        </div>
+      )}
 
       {acceptedProposal && paymentPaid && (
-
         <div style={styles.paymentSuccess}>
-
-          <div style={styles.paymentIcon}>
-            ✓
-          </div>
+          <div style={styles.paymentIcon}>✓</div>
 
           <div style={styles.paymentContent}>
-
             <h3 style={styles.paymentSuccessTitle}>
               Pagamento confirmado!
             </h3>
 
             <p style={styles.paymentSuccessText}>
-              O pagamento foi recebido com sucesso.
+              O pagamento foi confirmado pelo Mercado Pago.
               O projeto está pronto para ser iniciado.
             </p>
-
           </div>
 
           <div style={styles.paidBadge}>
             ✓ Pago
           </div>
-
         </div>
-
       )}
 
-      {/* ========================================================
-          PAGAMENTO PENDENTE
-      ======================================================== */}
-
       {acceptedProposal &&
+        canPay &&
         !loadingPayment &&
         !paymentPaid &&
         (paymentPending || !payment) && (
+          <div style={styles.paymentPending}>
+            <div style={styles.paymentContent}>
+              <h3 style={styles.paymentPendingTitle}>
+                Contrato fechado!
+              </h3>
 
-        <div style={styles.paymentPending}>
+              <p style={styles.paymentPendingText}>
+                Para iniciar o projeto, realize o pagamento
+                pelo Mercado Pago.
+              </p>
 
-          <div style={styles.paymentContent}>
+              {paymentPending && (
+                <p style={styles.paymentPendingInfo}>
+                  Existe um pagamento aguardando confirmação.
+                </p>
+              )}
+            </div>
 
-            <h3 style={styles.paymentPendingTitle}>
-              Contrato fechado!
-            </h3>
-
-            <p style={styles.paymentPendingText}>
-              Para liberar o Kanban e iniciar o
-              projeto, realize o pagamento em escrow.
-              O valor ficará retido até a aprovação
-              de cada marco.
-            </p>
-
+            <button
+              onClick={handlePagar}
+              disabled={paymentLoading}
+              style={{
+                ...styles.btnPagar,
+                opacity: paymentLoading ? 0.7 : 1,
+                cursor: paymentLoading
+                  ? 'not-allowed'
+                  : 'pointer'
+              }}
+            >
+              {paymentLoading
+                ? 'Redirecionando...'
+                : 'Pagar com Mercado Pago'}
+            </button>
           </div>
-
-          <button
-            onClick={handlePagar}
-            disabled={paymentLoading}
-            style={{
-              ...styles.btnPagar,
-              opacity: paymentLoading
-                ? 0.7
-                : 1,
-              cursor: paymentLoading
-                ? 'not-allowed'
-                : 'pointer'
-            }}
-          >
-            {paymentLoading
-              ? 'Redirecionando...'
-              : '💳 Pagar com Mercado Pago'}
-          </button>
-
-        </div>
-
-      )}
-
-      {/* ========================================================
-          CARREGANDO STATUS DO PAGAMENTO
-      ======================================================== */}
+        )}
 
       {acceptedProposal &&
-        loadingPayment && (
+        !canPay &&
+        !loadingPayment &&
+        !paymentPaid && (
+          <div style={styles.paymentWaiting}>
+            <div style={styles.waitingIcon}>⌛</div>
 
-        <div style={styles.paymentChecking}>
+            <div style={styles.paymentContent}>
+              <h3 style={styles.waitingTitle}>
+                Aguardando pagamento
+              </h3>
 
-          <span>
-            Verificando status do pagamento...
-          </span>
+              <p style={styles.paymentPendingText}>
+                O cliente precisa concluir o pagamento
+                pelo Mercado Pago para iniciar o projeto.
+              </p>
+            </div>
 
-        </div>
-
-      )}
-
-      {/* ========================================================
-          LISTA DE PROPOSTAS
-      ======================================================== */}
+            <span style={styles.pendingBadge}>
+              Pendente
+            </span>
+          </div>
+        )}
 
       {proposals.length === 0 ? (
-
         <p style={styles.noData}>
           Nenhuma proposta recebida até o momento.
         </p>
-
       ) : (
-
         <div style={styles.list}>
+          {proposals.map(prop => {
+            const milestones = Array.isArray(prop.milestonesData)
+              ? prop.milestonesData
+              : Array.isArray(prop.milestones)
+                ? prop.milestones
+                : [];
 
-          {proposals.map((prop) => (
+            const milestoneTotal = milestones.reduce(
+              (total, milestone) =>
+                total + Number(milestone.amount || 0),
+              0
+            );
 
-            <div
-              key={prop.id}
-              style={{
-                ...styles.proposalCard,
+            return (
+              <div
+                key={prop.id}
+                style={{
+                  ...styles.proposalCard,
+                  borderColor:
+                    prop.status === 'accepted'
+                      ? '#00c85140'
+                      : '#333'
+                }}
+              >
+                <div style={styles.cardHeader}>
+                  <h4 style={{ margin: 0 }}>
+                    {prop.freelancer?.name}
+                  </h4>
 
-                borderColor:
-                  prop.status === 'accepted'
-                    ? '#00c85140'
-                    : '#333'
-              }}
-            >
-
-              {/* HEADER */}
-
-              <div style={styles.cardHeader}>
-
-                <h4 style={{ margin: 0 }}>
-                  {prop.freelancer?.name}
-                </h4>
-
-                <span style={styles.priceTag}>
-                  R$ {Number(prop.amount)
-                    .toLocaleString('pt-BR')}
-                </span>
-
-              </div>
-
-              {/* STATUS */}
-
-              {prop.status === 'accepted' && (
-
-                <div style={styles.contractedBadge}>
-                  ✓ Contratado
-                </div>
-
-              )}
-
-              {prop.status === 'rejected' && (
-
-                <div style={styles.rejectedBadge}>
-                  ✕ Recusado
-                </div>
-
-              )}
-
-              {prop.status === 'pending' && (
-
-                <div style={styles.pendingProposalBadge}>
-                  Pendente
-                </div>
-
-              )}
-
-              {/* DESCRIÇÃO */}
-
-              <p style={styles.text}>
-                {prop.coverText}
-              </p>
-
-              {/* ==================================================
-                  ETAPAS
-              ================================================== */}
-
-              <div style={styles.milestonesPreview}>
-
-                <h5 style={styles.milestonesTitle}>
-                  <span>
-                    ETAPAS PROPOSTAS
+                  <span style={styles.priceTag}>
+                    R${' '}
+                    {Number(prop.amount).toLocaleString('pt-BR')}
                   </span>
-
-                  <span style={styles.milestoneTotal}>
-                    Total: R${' '}
-                    {(
-                      Array.isArray(prop.milestonesData)
-                        ? prop.milestonesData
-                        : Array.isArray(prop.milestones)
-                          ? prop.milestones
-                          : []
-                    )
-                      .reduce(
-                        (total, milestone) =>
-                          total +
-                          Number(milestone.amount),
-                        0
-                      )
-                      .toLocaleString('pt-BR')}
-                  </span>
-                </h5>
-
-                {(
-                  Array.isArray(prop.milestonesData)
-                    ? prop.milestonesData
-                    : Array.isArray(prop.milestones)
-                      ? prop.milestones
-                      : []
-                ).map((milestone, index) => (
-
-                  <div
-                    key={index}
-                    style={styles.previewRow}
-                  >
-
-                    <span>
-                      {index + 1}. {milestone.title}
-                    </span>
-
-                    <strong>
-                      R${' '}
-                      {Number(milestone.amount)
-                        .toLocaleString('pt-BR')}
-                    </strong>
-
-                  </div>
-
-                ))}
-
-              </div>
-
-              {/* ==================================================
-                  ACEITAR PROPOSTA
-              ================================================== */}
-
-              {prop.status === 'pending' && (
+                </div>
 
                 <button
-                  disabled={
-                    accepting !== null ||
-                    acceptedProposal !== undefined
-                  }
-                  onClick={() =>
-                    handleAccept(
-                      prop.id,
-                      prop.milestonesData ||
-                      prop.milestones
-                    )
-                  }
+                  type="button"
+                  onClick={() => {
+                    if (prop.freelancer?.id) {
+                      navigate(`/perfil/${prop.freelancer.id}`);
+                    }
+                  }}
+                  disabled={!prop.freelancer?.id}
                   style={{
-                    ...styles.acceptBtn,
-
-                    opacity:
-                      accepting === prop.id
-                        ? 0.6
-                        : 1,
-
-                    cursor:
-                      accepting !== null ||
-                      acceptedProposal
-                        ? 'not-allowed'
-                        : 'pointer'
+                    ...styles.profileBtn,
+                    opacity: prop.freelancer?.id ? 1 : 0.5,
+                    cursor: prop.freelancer?.id ? 'pointer' : 'not-allowed'
                   }}
                 >
-
-                  {accepting === prop.id
-                    ? 'Processando...'
-                    : '🤝 Aceitar Proposta'}
-
+                  Ver perfil do freelancer
                 </button>
 
-              )}
+                {prop.status === 'accepted' && (
+                  <div style={styles.contractedBadge}>
+                    ✓ Contratado
+                  </div>
+                )}
 
-              {/* ==================================================
-                  PROJETO LIBERADO
-              ================================================== */}
+                {prop.status === 'rejected' && (
+                  <div style={styles.rejectedBadge}>
+                    ✕ Recusado
+                  </div>
+                )}
 
-              {prop.status === 'accepted' &&
-                paymentPaid && (
+                {prop.status === 'pending' && (
+                  <div style={styles.pendingProposalBadge}>
+                    Pendente
+                  </div>
+                )}
 
-                <div style={styles.projectReady}>
-                  ✓ Pagamento confirmado —
-                  projeto liberado para início.
+                <p style={styles.text}>
+                  {prop.coverText}
+                </p>
+
+                <div style={styles.milestonesPreview}>
+                  <h5 style={styles.milestonesTitle}>
+                    <span>ETAPAS PROPOSTAS</span>
+
+                    <span style={styles.milestoneTotal}>
+                      Total: R${' '}
+                      {milestoneTotal.toLocaleString('pt-BR')}
+                    </span>
+                  </h5>
+
+                  {milestones.length === 0 ? (
+                    <p style={styles.noMilestones}>
+                      Nenhuma etapa informada.
+                    </p>
+                  ) : (
+                    milestones.map((milestone, index) => (
+                      <div
+                        key={index}
+                        style={styles.previewCard}
+                      >
+                        <div style={styles.previewRow}>
+                          <strong>
+                            {index + 1}. {milestone.title}
+                          </strong>
+
+                          <strong style={styles.milestoneAmount}>
+                            R${' '}
+                            {Number(milestone.amount || 0).toLocaleString('pt-BR')}
+                          </strong>
+                        </div>
+
+                        <p style={styles.milestoneDescription}>
+                          {milestone.description?.trim()
+                            ? milestone.description
+                            : 'Nenhuma descrição informada para esta etapa.'}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
 
-              )}
+                {prop.status === 'pending' && (
+                  <button
+                    disabled={
+                      accepting !== null ||
+                      acceptedProposal !== undefined
+                    }
+                    onClick={() =>
+                      handleAccept(
+                        prop.id,
+                        prop.milestonesData || prop.milestones
+                      )
+                    }
+                    style={{
+                      ...styles.acceptBtn,
+                      opacity:
+                        accepting === prop.id ? 0.6 : 1,
+                      cursor:
+                        accepting !== null ||
+                        acceptedProposal
+                          ? 'not-allowed'
+                          : 'pointer'
+                    }}
+                  >
+                    {accepting === prop.id
+                      ? 'Processando...'
+                      : 'Aceitar Proposta'}
+                  </button>
+                )}
 
-            </div>
-
-          ))}
-
+                {prop.status === 'accepted' && paymentPaid && (
+                  <div style={styles.projectReady}>
+                    ✓ Pagamento confirmado — projeto liberado
+                    para início.
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-
       )}
-
     </div>
   );
 }
 
-// ================================================================
-// ESTILOS
-// ================================================================
-
 const styles = {
-
   container: {
-    marginTop: '20px',
+    width: '100%',
+    maxWidth: '1200px',
+    margin: '20px auto',
+    padding: '0 20px',
+    boxSizing: 'border-box',
     color: '#fff'
   },
 
@@ -612,7 +500,8 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '10px'
+    marginBottom: '10px',
+    gap: '12px'
   },
 
   priceTag: {
@@ -621,16 +510,23 @@ const styles = {
     fontSize: '18px'
   },
 
+  profileBtn: {
+    backgroundColor: '#292929',
+    color: '#ff8a35',
+    border: '1px solid #ff6b00',
+    padding: '9px 14px',
+    borderRadius: '6px',
+    fontWeight: 'bold',
+    fontSize: '13px',
+    marginBottom: '14px'
+  },
+
   text: {
     color: '#ccc',
     fontSize: '14px',
     lineHeight: '1.6',
     margin: '0 0 15px 0'
   },
-
-  /* ============================================================
-     STATUS
-  ============================================================ */
 
   contractedBadge: {
     display: 'inline-block',
@@ -665,10 +561,6 @@ const styles = {
     marginBottom: '10px'
   },
 
-  /* ============================================================
-     ETAPAS
-  ============================================================ */
-
   milestonesPreview: {
     backgroundColor: '#111',
     padding: '15px',
@@ -683,7 +575,9 @@ const styles = {
     fontWeight: 'bold',
     margin: '0 0 8px 0',
     display: 'flex',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    gap: '10px',
+    flexWrap: 'wrap'
   },
 
   milestoneTotal: {
@@ -691,19 +585,38 @@ const styles = {
     fontWeight: 'bold'
   },
 
+  previewCard: {
+    padding: '10px 0',
+    borderBottom: '1px solid #252525'
+  },
+
   previewRow: {
     display: 'flex',
     justifyContent: 'space-between',
+    gap: '12px',
     fontSize: '13px',
     color: '#aaa',
-    marginTop: '6px',
-    padding: '4px 0',
-    borderBottom: '1px solid #1a1a1a'
+    alignItems: 'flex-start'
   },
 
-  /* ============================================================
-     BOTÃO ACEITAR
-  ============================================================ */
+  milestoneAmount: {
+    color: '#00c851',
+    whiteSpace: 'nowrap'
+  },
+
+  milestoneDescription: {
+    color: '#888',
+    fontSize: '12px',
+    lineHeight: '1.6',
+    margin: '8px 0 0',
+    whiteSpace: 'pre-wrap'
+  },
+
+  noMilestones: {
+    color: '#777',
+    fontSize: '13px',
+    margin: '10px 0 0'
+  },
 
   acceptBtn: {
     backgroundColor: '#00c851',
@@ -716,10 +629,6 @@ const styles = {
     marginTop: '5px'
   },
 
-  /* ============================================================
-     PAGAMENTO CONFIRMADO
-  ============================================================ */
-
   paymentSuccess: {
     display: 'flex',
     alignItems: 'center',
@@ -728,7 +637,8 @@ const styles = {
     border: '1px solid #006b2b',
     borderRadius: '8px',
     padding: '18px 20px',
-    marginBottom: '20px'
+    marginBottom: '20px',
+    flexWrap: 'wrap'
   },
 
   paymentIcon: {
@@ -746,7 +656,8 @@ const styles = {
   },
 
   paymentContent: {
-    flex: 1
+    flex: 1,
+    minWidth: '180px'
   },
 
   paymentSuccessTitle: {
@@ -772,10 +683,6 @@ const styles = {
     fontWeight: 'bold',
     whiteSpace: 'nowrap'
   },
-
-  /* ============================================================
-     PAGAMENTO PENDENTE
-  ============================================================ */
 
   paymentPending: {
     display: 'flex',
@@ -803,19 +710,45 @@ const styles = {
     lineHeight: '1.5'
   },
 
+  paymentPendingInfo: {
+    color: '#ffb300',
+    fontSize: '12px',
+    margin: '8px 0 0',
+    lineHeight: '1.5'
+  },
+
+  paymentWaiting: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px',
+    backgroundColor: '#211b08',
+    border: '1px solid #806000',
+    borderRadius: '10px',
+    padding: '18px 20px',
+    marginBottom: '24px',
+    flexWrap: 'wrap'
+  },
+
+  waitingIcon: {
+    fontSize: '24px',
+    flexShrink: 0
+  },
+
+  waitingTitle: {
+    color: '#ffb300',
+    margin: '0 0 6px',
+    fontSize: '16px'
+  },
+
   pendingBadge: {
-    backgroundColor: '#2b2b2b',
-    color: '#aaa',
+    backgroundColor: '#2b2105',
+    color: '#ffb300',
     padding: '7px 12px',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: 'bold',
     whiteSpace: 'nowrap'
   },
-
-  /* ============================================================
-     BOTÃO MERCADO PAGO
-  ============================================================ */
 
   btnPagar: {
     backgroundColor: '#009ee3',
@@ -829,10 +762,6 @@ const styles = {
     flexShrink: 0
   },
 
-  /* ============================================================
-     VERIFICANDO PAGAMENTO
-  ============================================================ */
-
   paymentChecking: {
     backgroundColor: '#111',
     border: '1px solid #333',
@@ -842,10 +771,6 @@ const styles = {
     color: '#aaa',
     fontSize: '13px'
   },
-
-  /* ============================================================
-     PROJETO LIBERADO
-  ============================================================ */
 
   projectReady: {
     marginTop: '15px',
@@ -857,5 +782,4 @@ const styles = {
     fontSize: '13px',
     fontWeight: 'bold'
   }
-
 };

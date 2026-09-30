@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 
 const express = require('express');
@@ -13,6 +14,8 @@ const chatRoutes = require('./routes/chats');
 const milestoneRoutes = require('./routes/milestones');
 const profileRoutes = require('./routes/profile');
 const paymentsRoutes = require('./routes/payments');
+const notificationRoutes = require('./routes/notifications');
+const reviewRoutes = require('./routes/reviews');
 
 const app = express();
 const server = http.createServer(app);
@@ -30,6 +33,8 @@ app.use('/chats', chatRoutes);
 app.use('/milestones', milestoneRoutes);
 app.use('/perfil', profileRoutes);
 app.use('/payments', paymentsRoutes);
+app.use('/notifications', notificationRoutes);
+app.use('/reviews', reviewRoutes);
 
 const io = new Server(server, {
   cors: {
@@ -40,21 +45,89 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log(`Conectado: ${socket.id}`);
 
-  socket.on('join_room', (data) => {
-    socket.join(`room_${data.roomId}`);
+  socket.on('join_room', async (data) => {
+    try {
+      const roomId = Number(data?.roomId);
+      const userId = Number(data?.userId);
+
+      if (
+        !Number.isInteger(roomId) ||
+        roomId <= 0 ||
+        !Number.isInteger(userId) ||
+        userId <= 0
+      ) {
+        return;
+      }
+
+      const chat = await prisma.chat.findFirst({
+        where: {
+          id: roomId,
+          OR: [
+            { clientId: userId },
+            { freelancerId: userId }
+          ]
+        },
+        select: {
+          id: true
+        }
+      });
+
+      if (!chat) {
+        return;
+      }
+
+      socket.join(`room_${roomId}`);
+    } catch (error) {
+      console.error('Erro ao entrar na sala:', error);
+    }
   });
 
   socket.on('send_message', async (data) => {
     try {
-      const saved = await prisma.chatRoomMessage.create({
-        data: {
-          chatId: Number(data.roomId),
-          senderId: Number(data.senderId),
-          text: data.text
+      const roomId = Number(data?.roomId);
+      const senderId = Number(data?.senderId);
+      const messageText = String(data?.text || '').trim();
+
+      if (
+        !Number.isInteger(roomId) ||
+        roomId <= 0 ||
+        !Number.isInteger(senderId) ||
+        senderId <= 0 ||
+        !messageText
+      ) {
+        return;
+      }
+
+      const chat = await prisma.chat.findFirst({
+        where: {
+          id: roomId,
+          OR: [
+            { clientId: senderId },
+            { freelancerId: senderId }
+          ]
+        },
+        include: {
+          project: {
+            select: {
+              title: true
+            }
+          }
         }
       });
 
-      io.to(`room_${data.roomId}`).emit('receive_message', {
+      if (!chat) {
+        return;
+      }
+
+      const saved = await prisma.chatRoomMessage.create({
+        data: {
+          chatId: roomId,
+          senderId,
+          text: messageText
+        }
+      });
+
+      io.to(`room_${roomId}`).emit('receive_message', {
         id: saved.id,
         chatId: saved.chatId,
         senderId: saved.senderId,
@@ -62,8 +135,27 @@ io.on('connection', (socket) => {
         createdAt: saved.createdAt
       });
 
+      const recipientId =
+        Number(chat.clientId) === senderId
+          ? Number(chat.freelancerId)
+          : Number(chat.clientId);
+
+      const sender = await prisma.user.findUnique({
+        where: { id: senderId },
+        select: {
+          name: true
+        }
+      });
+
+      await prisma.notification.create({
+        data: {
+          userId: recipientId,
+          type: 'new_message',
+          message: `${sender?.name || 'Você recebeu'} enviou uma mensagem no projeto "${chat.project.title}".`
+        }
+      });
     } catch (error) {
-      console.error('Erro ao salvar mensagem:', error);
+      console.error('Erro ao salvar mensagem ou criar notificação:', error);
     }
   });
 

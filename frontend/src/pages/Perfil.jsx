@@ -33,7 +33,7 @@ export default function Perfil() {
 
   async function loadProfile() {
     try {
-      const response = await api.get(`/perfil/${targetId}`);
+      const response = await api.get(`/perfil/publico/${targetId}`);
       setData(response.data);
       if (response.data.role === 'client') {
         setProfileForm({

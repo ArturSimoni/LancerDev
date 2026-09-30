@@ -43,12 +43,17 @@ model ClientProfile {
 }
 
 model FreelancerProfile {
-  userId     Int      @id @map("user_id")
-  bio        String?
-  hourlyRate Decimal? @map("hourly_rate")
-  resumeUrl  String?  @map("resume_url")
-  websiteUrl String?  @map("website_url")
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           Int       @id @map("user_id")
+  bio              String?
+  hourlyRate       Decimal?  @map("hourly_rate")
+  resumeUrl        String?   @map("resume_url")
+  websiteUrl       String?   @map("website_url")
+  mpUserId         String?   @map("mp_user_id")
+  mpAccessToken    String?   @map("mp_access_token")
+  mpRefreshToken   String?   @map("mp_refresh_token")
+  mpTokenExpiresAt DateTime? @map("mp_token_expires_at")
+  mpConnectedAt    DateTime? @map("mp_connected_at")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("freelancer_profiles")
 }
