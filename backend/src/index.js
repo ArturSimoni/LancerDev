@@ -1,4 +1,3 @@
-
 require('dotenv').config();
 
 const express = require('express');
@@ -109,6 +108,7 @@ io.on('connection', (socket) => {
         include: {
           project: {
             select: {
+              id: true,
               title: true
             }
           }
@@ -150,6 +150,7 @@ io.on('connection', (socket) => {
       await prisma.notification.create({
         data: {
           userId: recipientId,
+          projectId: chat.project.id,
           type: 'new_message',
           message: `${sender?.name || 'Você recebeu'} enviou uma mensagem no projeto "${chat.project.title}".`
         }

@@ -179,7 +179,8 @@ router.get('/minhas', authMiddleware, async (req, res, next) => {
       include: {
         project: {
           select: {
-            title: true
+            title: true,
+            status: true
           }
         }
       },
@@ -275,7 +276,7 @@ router.post('/:id/accept', authMiddleware, async (req, res, next) => {
       await tx.project.update({
         where: { id: proposal.projectId },
         data: {
-          status: 'open'
+          status: 'in_progress'
         }
       });
 
@@ -319,7 +320,7 @@ router.post('/:id/accept', authMiddleware, async (req, res, next) => {
     });
 
     return res.json({
-      message: 'Contrato fechado! Kanban e chat liberados.'
+      message: 'Contrato fechado! O projeto foi ativado.'
     });
   } catch (error) {
     next(error);

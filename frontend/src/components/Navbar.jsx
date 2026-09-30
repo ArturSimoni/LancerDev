@@ -130,8 +130,11 @@ export default function Navbar() {
       );
 
       setUnreadCount((current) => Math.max(0, current - 1));
+
+      return true;
     } catch (error) {
       console.error('Erro ao atualizar notificação:', error);
+      return false;
     }
   }
 
@@ -161,6 +164,83 @@ export default function Navbar() {
     } catch (error) {
       console.error('Erro ao atualizar notificações:', error);
     }
+  }
+
+  async function handleNotificationClick(notification) {
+    if (!notification.read) {
+      await markNotificationAsRead(notification.id);
+    }
+
+    setNotificationsOpen(false);
+    setMenuOpen(false);
+
+    const projectId = notification.projectId
+      ? Number(notification.projectId)
+      : null;
+
+    const type = String(notification.type || '').toLowerCase();
+    const message = String(notification.message || '').toLowerCase();
+
+    const isMessageNotification =
+      type.includes('message') ||
+      type.includes('chat') ||
+      message.includes('enviou uma mensagem') ||
+      message.includes('nova mensagem');
+
+    const isReviewNotification =
+      type.includes('review') ||
+      type.includes('rating') ||
+      type.includes('avaliacao') ||
+      type.includes('avaliação') ||
+      message.includes('nova avaliação') ||
+      message.includes('pode avaliar') ||
+      message.includes('avaliar o freelancer');
+
+    const isPaymentOrCompletionNotification =
+      type.includes('payment') ||
+      type.includes('pagamento') ||
+      type.includes('complete') ||
+      type.includes('concluido') ||
+      type.includes('concluído') ||
+      message.includes('pagamento') ||
+      message.includes('foi concluído') ||
+      message.includes('foi concluido') ||
+      message.includes('projeto concluído') ||
+      message.includes('projeto concluido');
+
+    if (isMessageNotification) {
+      navigate(
+        projectId
+          ? `/chat?projectId=${projectId}`
+          : '/chat'
+      );
+      return;
+    }
+
+    if (isReviewNotification) {
+      navigate(
+        projectId
+          ? `/projeto/${projectId}`
+          : '/dashboard'
+      );
+      return;
+    }
+
+    if (isPaymentOrCompletionNotification) {
+      navigate(
+        projectId
+          ? `/dashboard?projectId=${projectId}`
+          : '/dashboard'
+      );
+      return;
+    }
+
+    if (projectId) {
+      navigate(`/projeto/${projectId}`);
+      return;
+    }
+
+    navigate('/dashboard');
   }
 
   function handleLogout() {
@@ -239,7 +319,7 @@ export default function Navbar() {
             <div style={s.notificationEmpty}>Carregando notificações...</div>
           ) : notifications.length === 0 ? (
             <div style={s.notificationEmpty}>
-              <span style={s.emptyBell}>♧</span>
+              <span style={s.emptyBell}>🔔</span>
               <strong>Nenhuma notificação</strong>
               <span>Quando houver novidades, elas aparecerão aqui.</span>
             </div>
@@ -248,11 +328,7 @@ export default function Navbar() {
               <button
                 type="button"
                 key={notification.id}
-                onClick={() => {
-                  if (!notification.read) {
-                    markNotificationAsRead(notification.id);
-                  }
-                }}
+                onClick={() => handleNotificationClick(notification)}
                 style={{
                   ...s.notificationItem,
                   ...(notification.read ? {} : s.notificationUnread),
@@ -332,7 +408,7 @@ export default function Navbar() {
                   aria-label="Abrir notificações"
                   aria-expanded={notificationsOpen}
                 >
-                  <span style={s.bellIcon}>♧</span>
+                  <span style={s.bellIcon}>🔔</span>
                   {unreadCount > 0 && (
                     <span style={s.notificationBadge}>
                       {unreadCount > 99 ? '99+' : unreadCount}
@@ -436,7 +512,7 @@ export default function Navbar() {
                   if (!notificationsOpen) fetchNotifications();
                 }}
               >
-                <span>Notificações</span>
+                <span>🔔 Notificações</span>
                 {unreadCount > 0 && (
                   <span style={s.mobileNotificationBadge}>{unreadCount}</span>
                 )}
@@ -701,9 +777,8 @@ const s = {
     cursor: 'pointer',
   },
   bellIcon: {
-    fontSize: '21px',
+    fontSize: '18px',
     lineHeight: 1,
-    transform: 'rotate(180deg)',
   },
   notificationBadge: {
     position: 'absolute',
