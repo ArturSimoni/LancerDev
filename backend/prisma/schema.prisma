@@ -8,26 +8,29 @@ datasource db {
 }
 
 model User {
-  id               Int               @id @default(autoincrement())
-  name             String
-  email            String            @unique
-  password         String
-  role             String
-  createdAt        DateTime          @default(now()) @map("created_at")
-  projects         Project[]         @relation("ClientProjects")
-  proposals        Proposal[]
-  githubProjects   GithubProject[]
-  experiences      Experience[]
-  paymentsSent     Payment[]         @relation("PayerPayments")
-  paymentsReceived Payment[]         @relation("ReceiverPayments")
-  reviewsGiven     Review[]          @relation("Reviewer")
-  reviewsReceived  Review[]          @relation("Reviewee")
-  clientChats      Chat[]            @relation("ClientChats")
-  freelancerChats  Chat[]            @relation("FreelancerChats")
-  roomMessages     ChatRoomMessage[] @relation("RoomMessagesSent")
-  clientProfile    ClientProfile?
-  freelancerProfile FreelancerProfile?
-  notifications    Notification[]
+  id                  Int                 @id @default(autoincrement())
+  name                String
+  email               String              @unique
+  password            String
+  role                String
+  createdAt           DateTime            @default(now()) @map("created_at")
+  projects            Project[]           @relation("ClientProjects")
+  proposals           Proposal[]
+  githubProjects      GithubProject[]
+  experiences         Experience[]
+  paymentsSent        Payment[]           @relation("PayerPayments")
+  paymentsReceived    Payment[]           @relation("ReceiverPayments")
+  reviewsGiven        Review[]            @relation("Reviewer")
+  reviewsReceived     Review[]            @relation("Reviewee")
+  clientChats         Chat[]              @relation("ClientChats")
+  freelancerChats     Chat[]              @relation("FreelancerChats")
+  roomMessages        ChatRoomMessage[]   @relation("RoomMessagesSent")
+  clientProfile       ClientProfile?
+  freelancerProfile   FreelancerProfile?
+  mercadoPagoAccount  MercadoPagoAccount?
+  notifications       Notification[]
+  resetPasswordToken  String?             @map("reset_password_token")
+  resetPasswordExpires DateTime?          @map("reset_password_expires")
 
   @@map("users")
 }
@@ -43,19 +46,28 @@ model ClientProfile {
 }
 
 model FreelancerProfile {
-  userId           Int       @id @map("user_id")
-  bio              String?
-  hourlyRate       Decimal?  @map("hourly_rate")
-  resumeUrl        String?   @map("resume_url")
-  websiteUrl       String?   @map("website_url")
-  mpUserId         String?   @map("mp_user_id")
-  mpAccessToken    String?   @map("mp_access_token")
-  mpRefreshToken   String?   @map("mp_refresh_token")
-  mpTokenExpiresAt DateTime? @map("mp_token_expires_at")
-  mpConnectedAt    DateTime? @map("mp_connected_at")
-  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      Int       @id @map("user_id")
+  bio         String?
+  hourlyRate  Decimal?  @map("hourly_rate")
+  resumeUrl   String?   @map("resume_url")
+  websiteUrl  String?   @map("website_url")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("freelancer_profiles")
+}
+
+model MercadoPagoAccount {
+  userId            Int       @id @map("user_id")
+  mpUserId          String?   @unique @map("mp_user_id")
+  mpAccessToken     String?   @map("mp_access_token")
+  mpRefreshToken    String?   @map("mp_refresh_token")
+  mpTokenExpiresAt  DateTime? @map("mp_token_expires_at")
+  mpConnectedAt     DateTime? @map("mp_connected_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("mercadopago_accounts")
 }
 
 model Notification {
@@ -205,4 +217,16 @@ model Review {
   reviewee   User     @relation("Reviewee", fields: [revieweeId], references: [id], onDelete: Cascade)
 
   @@map("reviews")
+}
+
+model MercadoPagoOAuthState {
+  id        Int      @id @default(autoincrement())
+  state     String   @unique
+  userId    Int      @map("user_id")
+  verifier  String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([expiresAt])
+  @@map("mercadopago_oauth_states")
 }

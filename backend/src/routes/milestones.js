@@ -1,7 +1,9 @@
-
 const express = require('express');
+
 const router = express.Router();
+
 const prisma = require('../config/database');
+
 const authMiddleware = require('../middlewares/auth');
 
 router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
@@ -15,10 +17,14 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
     }
 
     const project = await prisma.project.findUnique({
-      where: { id: projectId },
+      where: {
+        id: projectId
+      },
       include: {
         proposals: {
-          where: { status: 'accepted' }
+          where: {
+            status: 'accepted'
+          }
         }
       }
     });
@@ -30,6 +36,7 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
     }
 
     const isClient = Number(project.clientId) === Number(req.userId);
+
     const isFreelancer = project.proposals.some(
       proposal => Number(proposal.freelancerId) === Number(req.userId)
     );
@@ -40,25 +47,13 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
       });
     }
 
-    const payment = await prisma.payment.findFirst({
+    const milestones = await prisma.milestone.findMany({
       where: {
-        projectId,
-        status: 'paid'
+        projectId
       },
       orderBy: {
-        createdAt: 'desc'
+        id: 'asc'
       }
-    });
-
-    if (!payment) {
-      return res.status(403).json({
-        message: 'O pagamento do projeto ainda não foi confirmado.'
-      });
-    }
-
-    const milestones = await prisma.milestone.findMany({
-      where: { projectId },
-      orderBy: { createdAt: 'asc' }
     });
 
     return res.json(milestones);
@@ -72,7 +67,12 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
     const milestoneId = Number(req.params.id);
     const { status } = req.body;
 
-    const validStatus = ['pending', 'in_progress', 'review', 'done'];
+    const validStatuses = [
+      'pending',
+      'in_progress',
+      'in_review',
+      'approved'
+    ];
 
     if (!Number.isInteger(milestoneId) || milestoneId <= 0) {
       return res.status(400).json({
@@ -80,19 +80,23 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
       });
     }
 
-    if (!validStatus.includes(status)) {
+    if (!validStatuses.includes(status)) {
       return res.status(400).json({
         message: 'Status inválido.'
       });
     }
 
     const milestone = await prisma.milestone.findUnique({
-      where: { id: milestoneId },
+      where: {
+        id: milestoneId
+      },
       include: {
         project: {
           include: {
             proposals: {
-              where: { status: 'accepted' }
+              where: {
+                status: 'accepted'
+              }
             }
           }
         }
@@ -111,14 +115,19 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
       });
     }
 
+    const acceptedProposal = milestone.project.proposals[0];
+
+    if (!acceptedProposal) {
+      return res.status(400).json({
+        message: 'Este projeto ainda não possui uma proposta aceita.'
+      });
+    }
+
     const isClient =
       Number(milestone.project.clientId) === Number(req.userId);
 
-    const acceptedProposal = milestone.project.proposals[0];
-
-    const isFreelancer = acceptedProposal
-      ? Number(acceptedProposal.freelancerId) === Number(req.userId)
-      : false;
+    const isFreelancer =
+      Number(acceptedProposal.freelancerId) === Number(req.userId);
 
     if (!isClient && !isFreelancer) {
       return res.status(403).json({
@@ -126,82 +135,80 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
       });
     }
 
+    if (isFreelancer) {
+      if (
+        status === 'in_progress' &&
+        milestone.status !== 'pending'
+      ) {
+        return res.status(400).json({
+          message: 'Apenas uma etapa em A Fazer pode ser iniciada.'
+        });
+      }
+
+      if (
+        status === 'pending' &&
+        milestone.status !== 'in_progress'
+      ) {
+        return res.status(400).json({
+          message: 'Apenas uma etapa em desenvolvimento pode voltar para A Fazer.'
+        });
+      }
+
+      if (
+        status === 'in_review' &&
+        milestone.status !== 'in_progress'
+      ) {
+        return res.status(400).json({
+          message: 'Apenas uma etapa em desenvolvimento pode ser enviada para revisão.'
+        });
+      }
+
+      if (
+        status === 'approved'
+      ) {
+        return res.status(403).json({
+          message: 'Somente o cliente pode aprovar uma etapa.'
+        });
+      }
+    }
+
     if (isClient) {
-      if (milestone.status !== 'review') {
-        return res.status(400).json({
-          message: 'Você só pode agir em marcos em revisão.'
+      if (
+        status !== 'approved' &&
+        status !== 'in_progress'
+      ) {
+        return res.status(403).json({
+          message: 'O cliente só pode aprovar a etapa ou solicitar correção.'
         });
       }
 
-      if (!['in_progress', 'done'].includes(status)) {
+      if (milestone.status !== 'in_review') {
         return res.status(400).json({
-          message: 'Ação inválida para o cliente.'
+          message: 'Somente uma etapa em revisão pode ser avaliada.'
         });
       }
     }
 
-    if (isFreelancer && status === 'done') {
-      return res.status(403).json({
-        message: 'Apenas o cliente pode aprovar a conclusão.'
-      });
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      const updatedMilestone = await tx.milestone.update({
-        where: { id: milestoneId },
-        data: { status }
-      });
-
-      let projectCompleted = false;
-
-      if (status === 'done') {
-        const remainingMilestones = await tx.milestone.count({
-          where: {
-            projectId: milestone.projectId,
-            status: { not: 'done' }
-          }
-        });
-
-        if (remainingMilestones === 0) {
-          await tx.project.update({
-            where: { id: milestone.projectId },
-            data: { status: 'completed' }
-          });
-
-          projectCompleted = true;
-
-          const freelancerId = acceptedProposal.freelancerId;
-          const clientId = milestone.project.clientId;
-
-          await tx.notification.createMany({
-            data: [
-              {
-                userId: clientId,
-                type: 'project_completed',
-                message: `O projeto "${milestone.project.title}" foi concluído. Você já pode avaliar o freelancer.`
-              },
-              {
-                userId: freelancerId,
-                type: 'project_completed',
-                message: `O projeto "${milestone.project.title}" foi concluído. Você já pode avaliar o cliente.`
-              }
-            ]
-          });
-        }
+    const updatedMilestone = await prisma.milestone.update({
+      where: {
+        id: milestoneId
+      },
+      data: {
+        status
       }
-
-      return {
-        updatedMilestone,
-        projectCompleted
-      };
     });
 
     return res.json({
-      ...result.updatedMilestone,
-      projectCompleted: result.projectCompleted,
-      message: result.projectCompleted
-        ? 'Projeto concluído! As avaliações já estão disponíveis.'
-        : 'Marco atualizado com sucesso.'
+      ...updatedMilestone,
+      projectCompleted: false,
+      message:
+        status === 'in_review'
+          ? 'Marco enviado para revisão.'
+          : status === 'approved'
+            ? 'Marco aprovado. O pagamento está disponível.'
+            : status === 'in_progress'
+              ? 'Marco iniciado.'
+              : 'Marco atualizado com sucesso.'
     });
   } catch (error) {
     next(error);

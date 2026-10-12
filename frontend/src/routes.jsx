@@ -14,6 +14,8 @@ import VerPropostas from "./pages/VerPropostas";
 import Perfil from "./pages/Perfil";
 import PagamentoSucesso from "./pages/PagamentoSucesso";
 import PagamentoFalha from "./pages/PagamentoFalha";
+import RecuperarSenha from "./pages/RecuperarSenha";
+import RedefinirSenha from "./pages/RedefinirSenha";
 
 const ProtectedRoute = ({ children, isPrivate }) => {
   const token = localStorage.getItem('@LancerDev:token');
@@ -35,22 +37,24 @@ export const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { index: true, element: <Home /> },
-      { path: "login",         element: <ProtectedRoute isPrivate={false}><Login /></ProtectedRoute> },
-      { path: "cadastro",      element: <ProtectedRoute isPrivate={false}><Cadastro /></ProtectedRoute> },
-      { path: "dashboard",     element: <ProtectedRoute isPrivate={true}><Dashboard /></ProtectedRoute> },
+      { path: "login", element: <ProtectedRoute isPrivate={false}><Login /></ProtectedRoute> },
+      { path: "cadastro", element: <ProtectedRoute isPrivate={false}><Cadastro /></ProtectedRoute> },
+      { path: "dashboard", element: <ProtectedRoute isPrivate={true}><Dashboard /></ProtectedRoute> },
       { path: "criar-projeto", element: <ProtectedRoute isPrivate={true}><CriarProjeto /></ProtectedRoute> },
       { path: "meus-anuncios", element: <ProtectedRoute isPrivate={true}><MeusAnuncios /></ProtectedRoute> },
-      { path: "projetos",      element: <ProtectedRoute isPrivate={true}><BuscarProjetos /></ProtectedRoute> },
-      { path: "propostas",     element: <ProtectedRoute isPrivate={true}><MinhasPropostas /></ProtectedRoute> },
-      { path: "chat",          element: <ProtectedRoute isPrivate={true}><Chat /></ProtectedRoute> },
-      { path: "projeto/:id",   element: <ProtectedRoute isPrivate={true}><DetalhesProjeto /></ProtectedRoute> },
+      { path: "projetos", element: <ProtectedRoute isPrivate={true}><BuscarProjetos /></ProtectedRoute> },
+      { path: "propostas", element: <ProtectedRoute isPrivate={true}><MinhasPropostas /></ProtectedRoute> },
+      { path: "chat", element: <ProtectedRoute isPrivate={true}><Chat /></ProtectedRoute> },
+      { path: "projeto/:id", element: <ProtectedRoute isPrivate={true}><DetalhesProjeto /></ProtectedRoute> },
       { path: "projetos/:projectId/propostas", element: <ProtectedRoute isPrivate={true}><VerPropostas /></ProtectedRoute> },
-      { path: "perfil",        element: <ProtectedRoute isPrivate={true}><Perfil /></ProtectedRoute> },
-      { path: "perfil/:id",    element: <ProtectedRoute isPrivate={true}><Perfil /></ProtectedRoute> },
+      { path: "perfil", element: <ProtectedRoute isPrivate={true}><Perfil /></ProtectedRoute> },
+      { path: "perfil/:id", element: <ProtectedRoute isPrivate={true}><Perfil /></ProtectedRoute> },
       { path: "*", element: <Navigate to="/" replace /> },
       { path: "pagamento/sucesso", element: <ProtectedRoute isPrivate={true}><PagamentoSucesso /></ProtectedRoute> },
-      { path: "pagamento/falha",   element: <ProtectedRoute isPrivate={true}><PagamentoFalha /></ProtectedRoute> },
-      { path: "pagamento/pendente",element: <ProtectedRoute isPrivate={true}><PagamentoSucesso /></ProtectedRoute> },
+      { path: "pagamento/falha", element: <ProtectedRoute isPrivate={true}><PagamentoFalha /></ProtectedRoute> },
+      { path: "pagamento/pendente", element: <ProtectedRoute isPrivate={true}><PagamentoSucesso /></ProtectedRoute> },
+      { path: "recuperar-senha", element: <RecuperarSenha /> },
+      { path: "redefinir-senha", element: <RedefinirSenha /> },
     ],
   },
 ]);

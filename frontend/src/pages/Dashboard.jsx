@@ -3,25 +3,74 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import KanbanBoard from '../components/KanbanBoard';
 
+function isMilestoneCompleted(status) {
+  return [
+    'approved',
+    'done',
+    'completed',
+    'complete',
+    'concluido',
+    'concluida',
+    'concluído',
+    'concluída',
+    'finished',
+    'finalizado',
+    'finalizada'
+  ].includes(
+    String(status || '').trim().toLowerCase()
+  );
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
 
-  const role = localStorage.getItem('@LancerDev:role');
+  const role =
+    localStorage.getItem('@LancerDev:role');
 
   const user = localStorage.getItem('@LancerDev:user')
-    ? JSON.parse(localStorage.getItem('@LancerDev:user'))
+    ? JSON.parse(
+        localStorage.getItem('@LancerDev:user')
+      )
     : null;
 
-  const [activeProjects, setActiveProjects] = useState([]);
-  const [historyProjects, setHistoryProjects] = useState([]);
-  const [pendingReviews, setPendingReviews] = useState([]);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [paymentStatus, setPaymentStatus] = useState({});
-  const [selectedReview, setSelectedReview] = useState(null);
-  const [rating, setRating] = useState(5);
-  const [reviewMessage, setReviewMessage] = useState('');
-  const [reviewLoading, setReviewLoading] = useState(false);
+  const [activeProjects, setActiveProjects] =
+    useState([]);
+
+  const [historyProjects, setHistoryProjects] =
+    useState([]);
+
+  const [pendingReviews, setPendingReviews] =
+    useState([]);
+
+  const [selectedProject, setSelectedProject] =
+    useState(null);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [paymentStatus, setPaymentStatus] =
+    useState({});
+
+  const [selectedReview, setSelectedReview] =
+    useState(null);
+
+  const [rating, setRating] =
+    useState(5);
+
+  const [reviewMessage, setReviewMessage] =
+    useState('');
+
+  const [reviewLoading, setReviewLoading] =
+    useState(false);
+
+  const [mpConnected, setMpConnected] =
+    useState(false);
+
+  const [mpConnecting, setMpConnecting] =
+    useState(false);
+
+  const [paymentLoading, setPaymentLoading] =
+    useState(false);
 
   useEffect(() => {
     if (!role) {
@@ -36,27 +85,64 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
-      const [activeResponse, historyResponse, pendingResponse] = await Promise.all([
+      const [
+        activeResponse,
+        historyResponse,
+        pendingResponse
+      ] = await Promise.all([
         api.get('/projects/ativos'),
         api.get('/projects/historico'),
         api.get('/reviews/pendentes')
       ]);
 
-      const active = Array.isArray(activeResponse.data)
-        ? activeResponse.data
-        : [];
+      const active =
+        Array.isArray(activeResponse.data)
+          ? activeResponse.data
+          : [];
 
       setActiveProjects(active);
+
       setHistoryProjects(
-        Array.isArray(historyResponse.data) ? historyResponse.data : []
-      );
-      setPendingReviews(
-        Array.isArray(pendingResponse.data) ? pendingResponse.data : []
+        Array.isArray(historyResponse.data)
+          ? historyResponse.data
+          : []
       );
 
+      setPendingReviews(
+        Array.isArray(pendingResponse.data)
+          ? pendingResponse.data
+          : []
+      );
+
+      if (role === 'freelancer') {
+        try {
+          const response =
+            await api.get(
+              '/payments/oauth/status'
+            );
+
+          setMpConnected(
+            Boolean(response.data.connected)
+          );
+        } catch {
+          setMpConnected(false);
+        }
+      }
+
       setSelectedProject(current => {
-        if (current && active.some(project => project.id === current.id)) {
-          return active.find(project => project.id === current.id);
+        if (
+          current &&
+          active.some(
+            project =>
+              Number(project.id) ===
+              Number(current.id)
+          )
+        ) {
+          return active.find(
+            project =>
+              Number(project.id) ===
+              Number(current.id)
+          );
         }
 
         return active[0] || null;
@@ -64,7 +150,10 @@ export default function Dashboard() {
 
       await checkProjectPayments(active);
     } catch (error) {
-      console.error('Erro ao carregar dashboard:', error);
+      console.error(
+        'Erro ao carregar dashboard:',
+        error
+      );
     } finally {
       setLoading(false);
     }
@@ -76,10 +165,127 @@ export default function Dashboard() {
     await Promise.all(
       projects.map(async project => {
         try {
-          await api.get(`/milestones/projeto/${project.id}`);
-          status[project.id] = true;
+          const [
+            milestonesResponse,
+            paymentsResponse
+          ] = await Promise.all([
+            api.get(
+              `/milestones/projeto/${project.id}`
+            ),
+            api.get(
+              `/payments/projeto/${project.id}`
+            )
+          ]);
+
+          const milestones =
+            Array.isArray(
+              milestonesResponse.data
+            )
+              ? milestonesResponse.data
+              : Array.isArray(
+                  milestonesResponse.data
+                    ?.milestones
+                )
+                ? milestonesResponse.data
+                    .milestones
+                : [];
+
+          const payments =
+            Array.isArray(
+              paymentsResponse.data?.payments
+            )
+              ? paymentsResponse.data.payments
+              : [];
+
+          const orderedMilestones =
+            milestones
+              .slice()
+              .sort(
+                (a, b) =>
+                  Number(a.id) -
+                  Number(b.id)
+              );
+
+          const paidMilestoneIds =
+            new Set(
+              payments
+                .filter(
+                  payment =>
+                    payment.status === 'paid'
+                )
+                .map(
+                  payment =>
+                    Number(
+                      payment.milestoneId
+                    )
+                )
+            );
+
+          const currentMilestone =
+            orderedMilestones.find(
+              milestone =>
+                !paidMilestoneIds.has(
+                  Number(milestone.id)
+                )
+            ) || null;
+
+          const currentPayment =
+            currentMilestone
+              ? payments
+                  .slice()
+                  .reverse()
+                  .find(
+                    payment =>
+                      Number(
+                        payment.milestoneId
+                      ) ===
+                      Number(
+                        currentMilestone.id
+                      )
+                  ) || null
+              : null;
+
+          const completedUnpaidMilestone =
+            currentMilestone &&
+            isMilestoneCompleted(
+              currentMilestone.status
+            )
+              ? currentMilestone
+              : null;
+
+          const allPaid =
+            orderedMilestones.length > 0 &&
+            orderedMilestones.every(
+              milestone =>
+                paidMilestoneIds.has(
+                  Number(milestone.id)
+                )
+            );
+
+          status[project.id] = {
+            milestones:
+              orderedMilestones,
+            payments,
+            currentMilestone,
+            currentPayment,
+            completedUnpaidMilestone,
+            allPaid
+          };
         } catch (error) {
-          status[project.id] = false;
+          console.error(
+            `Erro ao consultar pagamentos do projeto ${project.id}:`,
+            error
+          );
+
+          status[project.id] = {
+            milestones: [],
+            payments: [],
+            currentMilestone: null,
+            currentPayment: null,
+            completedUnpaidMilestone:
+              null,
+            allPaid: false
+          };
         }
       })
     );
@@ -87,12 +293,138 @@ export default function Dashboard() {
     setPaymentStatus(status);
   }
 
+  async function handlePayMilestone(
+    projectId,
+    milestoneId
+  ) {
+    if (paymentLoading) {
+      return;
+    }
+
+    const projectData =
+      paymentStatus[projectId];
+
+    if (!projectData) {
+      alert(
+        'Não foi possível verificar o estado do pagamento.'
+      );
+      return;
+    }
+
+    if (
+      !projectData.currentMilestone ||
+      Number(
+        projectData.currentMilestone.id
+      ) !== Number(milestoneId)
+    ) {
+      alert(
+        'Os pagamentos dos marcos devem seguir a ordem do projeto.'
+      );
+      return;
+    }
+
+    if (
+      !isMilestoneCompleted(
+        projectData.currentMilestone.status
+      )
+    ) {
+      alert(
+        'Este marco ainda não foi aprovado.'
+      );
+      return;
+    }
+
+    if (
+      projectData.currentPayment?.status ===
+      'paid'
+    ) {
+      alert(
+        'Este marco já foi pago.'
+      );
+      return;
+    }
+
+    setPaymentLoading(true);
+
+    try {
+      const response =
+        await api.post(
+          '/payments/criar',
+          {
+            projectId:
+              Number(projectId),
+            milestoneId:
+              Number(milestoneId)
+          }
+        );
+
+      const checkoutUrl =
+        response.data?.sandboxInitPoint ||
+        response.data?.initPoint;
+
+      if (!checkoutUrl) {
+        throw new Error(
+          'O Mercado Pago não retornou o endereço de pagamento.'
+        );
+      }
+
+      window.location.href =
+        checkoutUrl;
+    } catch (error) {
+      console.error(
+        'Erro ao iniciar pagamento:',
+        error
+      );
+
+      alert(
+        error.response?.data?.message ||
+        error.message ||
+        'Não foi possível iniciar o pagamento.'
+      );
+
+      setPaymentLoading(false);
+    }
+  }
+
+  async function handleConnectMercadoPago() {
+    try {
+      setMpConnecting(true);
+
+      const response =
+        await api.post(
+          '/payments/oauth/conectar'
+        );
+
+      if (!response.data?.url) {
+        throw new Error(
+          'O servidor não retornou a URL de autorização.'
+        );
+      }
+
+      window.location.href =
+        response.data.url;
+    } catch (error) {
+      console.error(
+        'Erro ao conectar Mercado Pago:',
+        error
+      );
+
+      alert(
+        error.response?.data?.message ||
+        error.message ||
+        'Não foi possível iniciar a conexão com o Mercado Pago.'
+      );
+
+      setMpConnecting(false);
+    }
+  }
+
   function handleSelectProject(project) {
     setSelectedProject(project);
   }
 
-  function handleOpenReview(project) {
-    setSelectedReview(project);
+  function handleOpenReview(review) {
+    setSelectedReview(review);
     setRating(5);
     setReviewMessage('');
   }
@@ -108,30 +440,50 @@ export default function Dashboard() {
 
     try {
       await api.post('/reviews', {
-        projectId: selectedReview.projectId,
+        projectId:
+          selectedReview.projectId,
         rating: Number(rating),
-        message: reviewMessage.trim()
+        message:
+          reviewMessage.trim()
       });
 
-      alert('Avaliação enviada com sucesso!');
+      alert(
+        'Avaliação enviada com sucesso!'
+      );
+
       setSelectedReview(null);
       setRating(5);
       setReviewMessage('');
 
-      const [historyResponse, pendingResponse] = await Promise.all([
+      const [
+        historyResponse,
+        pendingResponse
+      ] = await Promise.all([
         api.get('/projects/historico'),
         api.get('/reviews/pendentes')
       ]);
 
       setHistoryProjects(
-        Array.isArray(historyResponse.data) ? historyResponse.data : []
+        Array.isArray(
+          historyResponse.data
+        )
+          ? historyResponse.data
+          : []
       );
 
       setPendingReviews(
-        Array.isArray(pendingResponse.data) ? pendingResponse.data : []
+        Array.isArray(
+          pendingResponse.data
+        )
+          ? pendingResponse.data
+          : []
       );
     } catch (error) {
-      console.error('Erro ao enviar avaliação:', error);
+      console.error(
+        'Erro ao enviar avaliação:',
+        error
+      );
+
       alert(
         error.response?.data?.message ||
         'Não foi possível enviar a avaliação.'
@@ -142,19 +494,55 @@ export default function Dashboard() {
   }
 
   if (loading) {
-    return <div style={styles.loading}>Carregando painel...</div>;
+    return (
+      <div style={styles.loading}>
+        Carregando painel...
+      </div>
+    );
   }
 
+  const selectedPaymentData =
+    selectedProject
+      ? paymentStatus[
+          selectedProject.id
+        ] || null
+      : null;
+
+  const selectedCurrentMilestone =
+    selectedPaymentData?.currentMilestone ||
+    null;
+
+  const selectedCurrentPayment =
+    selectedPaymentData?.currentPayment ||
+    null;
+
   const selectedProjectPaid =
-    selectedProject && paymentStatus[selectedProject.id] === true;
+    Boolean(
+      selectedPaymentData?.allPaid
+    );
+
+  const canPaySelectedMilestone =
+    role === 'client' &&
+    selectedCurrentMilestone &&
+    isMilestoneCompleted(
+      selectedCurrentMilestone.status
+    ) &&
+    selectedCurrentPayment?.status !==
+      'paid';
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Painel de Controle</h1>
+          <h1 style={styles.title}>
+            Painel de Controle
+          </h1>
+
           <p style={styles.subtitle}>
-            Bem-vindo, <span style={styles.userName}>{user?.name}</span>
+            Bem-vindo,{' '}
+            <span style={styles.userName}>
+              {user?.name}
+            </span>
           </p>
         </div>
 
@@ -162,7 +550,10 @@ export default function Dashboard() {
           Perfil:{' '}
           <strong
             style={{
-              color: role === 'freelancer' ? '#00c851' : '#33b5e5'
+              color:
+                role === 'freelancer'
+                  ? '#00c851'
+                  : '#33b5e5'
             }}
           >
             {role?.toUpperCase()}
@@ -174,21 +565,27 @@ export default function Dashboard() {
         {role === 'freelancer' ? (
           <>
             <button
-              onClick={() => navigate('/projetos')}
+              onClick={() =>
+                navigate('/projetos')
+              }
               style={styles.primaryBtn}
             >
               Buscar Projetos
             </button>
 
             <button
-              onClick={() => navigate('/propostas')}
+              onClick={() =>
+                navigate('/propostas')
+              }
               style={styles.secondaryBtn}
             >
               Minhas Candidaturas
             </button>
 
             <button
-              onClick={() => navigate('/chat')}
+              onClick={() =>
+                navigate('/chat')
+              }
               style={styles.chatBtn}
             >
               Chat
@@ -197,21 +594,31 @@ export default function Dashboard() {
         ) : (
           <>
             <button
-              onClick={() => navigate('/criar-projeto')}
+              onClick={() =>
+                navigate(
+                  '/criar-projeto'
+                )
+              }
               style={styles.primaryBtn}
             >
               Publicar Vaga
             </button>
 
             <button
-              onClick={() => navigate('/meus-anuncios')}
+              onClick={() =>
+                navigate(
+                  '/meus-anuncios'
+                )
+              }
               style={styles.secondaryBtn}
             >
               Meus Anúncios
             </button>
 
             <button
-              onClick={() => navigate('/chat')}
+              onClick={() =>
+                navigate('/chat')
+              }
               style={styles.chatBtn}
             >
               Chat
@@ -220,8 +627,74 @@ export default function Dashboard() {
         )}
       </div>
 
+      {role === 'freelancer' && (
+        <div style={styles.mpSection}>
+          <div style={styles.mpInfo}>
+            <div>
+              <h2 style={styles.mpTitle}>
+                Conta Mercado Pago
+              </h2>
+
+              <p style={styles.mpDescription}>
+                Conecte sua conta Mercado Pago
+                para receber os pagamentos dos
+                seus marcos.
+              </p>
+            </div>
+
+            <span
+              style={{
+                ...styles.mpBadge,
+                color: mpConnected
+                  ? '#00c851'
+                  : '#ff6b00',
+                backgroundColor:
+                  mpConnected
+                    ? '#00c85115'
+                    : '#ff6b0015',
+                borderColor:
+                  mpConnected
+                    ? '#00c85140'
+                    : '#ff6b0040'
+              }}
+            >
+              {mpConnected
+                ? 'Conta conectada'
+                : 'Não conectada'}
+            </span>
+          </div>
+
+          {mpConnected ? (
+            <p style={styles.mpSuccess}>
+              Sua conta Mercado Pago está
+              vinculada ao LancerDev. Os
+              pagamentos aprovados serão
+              direcionados para essa conta.
+            </p>
+          ) : (
+            <button
+              onClick={
+                handleConnectMercadoPago
+              }
+              disabled={mpConnecting}
+              style={{
+                ...styles.mpButton,
+                opacity:
+                  mpConnecting ? 0.6 : 1
+              }}
+            >
+              {mpConnecting
+                ? 'Conectando...'
+                : 'Conectar Mercado Pago'}
+            </button>
+          )}
+        </div>
+      )}
+
       <div style={styles.kanbanSection}>
-        <h2 style={styles.sectionTitle}>Projetos em Andamento</h2>
+        <h2 style={styles.sectionTitle}>
+          Projetos em Andamento
+        </h2>
 
         {activeProjects.length === 0 ? (
           <div style={styles.emptyState}>
@@ -239,37 +712,57 @@ export default function Dashboard() {
           <>
             {activeProjects.length > 1 && (
               <div style={styles.projectTabs}>
-                {activeProjects.map(project => (
-                  <button
-                    key={project.id}
-                    onClick={() => handleSelectProject(project)}
-                    style={{
-                      ...styles.tabBtn,
-                      borderColor:
-                        selectedProject?.id === project.id
-                          ? '#ff6b00'
-                          : '#333',
-                      color:
-                        selectedProject?.id === project.id
-                          ? '#ff6b00'
-                          : '#aaa'
-                    }}
-                  >
-                    {project.title}
-                  </button>
-                ))}
+                {activeProjects.map(
+                  project => (
+                    <button
+                      key={project.id}
+                      onClick={() =>
+                        handleSelectProject(
+                          project
+                        )
+                      }
+                      style={{
+                        ...styles.tabBtn,
+                        borderColor:
+                          selectedProject?.id ===
+                          project.id
+                            ? '#ff6b00'
+                            : '#333',
+                        color:
+                          selectedProject?.id ===
+                          project.id
+                            ? '#ff6b00'
+                            : '#aaa'
+                      }}
+                    >
+                      {project.title}
+                    </button>
+                  )
+                )}
               </div>
             )}
 
             {selectedProject && (
               <>
-                <div style={styles.projectHeader}>
+                <div
+                  style={
+                    styles.projectHeader
+                  }
+                >
                   <div>
-                    <h3 style={styles.projectTitle}>
+                    <h3
+                      style={
+                        styles.projectTitle
+                      }
+                    >
                       {selectedProject.title}
                     </h3>
 
-                    <p style={styles.projectDescription}>
+                    <p
+                      style={
+                        styles.projectDescription
+                      }
+                    >
                       {role === 'client'
                         ? 'Acompanhe o andamento das etapas do projeto.'
                         : 'Acompanhe e atualize o andamento das suas etapas.'}
@@ -279,56 +772,335 @@ export default function Dashboard() {
                   <span
                     style={{
                       ...styles.projectStatus,
-                      backgroundColor: selectedProjectPaid
-                        ? '#00c85115'
-                        : '#ff6b0015',
-                      color: selectedProjectPaid
-                        ? '#00c851'
-                        : '#ff6b00',
-                      borderColor: selectedProjectPaid
-                        ? '#00c85140'
-                        : '#ff6b0040'
+                      backgroundColor:
+                        selectedProjectPaid
+                          ? '#00c85115'
+                          : '#ff6b0015',
+                      color:
+                        selectedProjectPaid
+                          ? '#00c851'
+                          : '#ff6b00',
+                      borderColor:
+                        selectedProjectPaid
+                          ? '#00c85140'
+                          : '#ff6b0040'
                     }}
                   >
                     {selectedProjectPaid
-                      ? 'Pagamento confirmado'
-                      : 'Pagamento pendente'}
+                      ? 'Todos os pagamentos confirmados'
+                      : 'Projeto em andamento'}
                   </span>
                 </div>
 
                 {selectedProjectPaid ? (
-                  <KanbanBoard
-                    projectId={selectedProject.id}
-                    isFreelancer={role === 'freelancer'}
-                  />
-                ) : (
-                  <div style={styles.paymentWaiting}>
-                    <div style={styles.paymentIcon}>$</div>
+                  <div>
+                    <div
+                      style={
+                        styles.milestoneSuccess
+                      }
+                    >
+                      <div>
+                        <strong
+                          style={
+                            styles.milestoneSuccessTitle
+                          }
+                        >
+                          Projeto concluído
+                        </strong>
 
-                    <h3 style={styles.paymentTitle}>
-                      Aguardando pagamento
-                    </h3>
+                        <p
+                          style={
+                            styles.milestoneSuccessText
+                          }
+                        >
+                          Todos os marcos foram
+                          aprovados e pagos.
+                        </p>
+                      </div>
 
-                    <p style={styles.paymentText}>
-                      O Kanban será liberado assim que o pagamento deste
-                      projeto for confirmado.
-                    </p>
+                      <span
+                        style={
+                          styles.paidBadge
+                        }
+                      >
+                        Pago
+                      </span>
+                    </div>
 
-                    {role === 'freelancer' && (
-                      <p style={styles.paymentSecondaryText}>
-                        O cliente precisa concluir o pagamento para que
-                        você possa iniciar as atividades do projeto.
-                      </p>
-                    )}
+                    <KanbanBoard
+                      projectId={
+                        selectedProject.id
+                      }
+                      isFreelancer={
+                        role ===
+                        'freelancer'
+                      }
+                    />
+                  </div>
+                ) : selectedCurrentMilestone ? (
+                  <div
+                    style={
+                      styles.milestoneCard
+                    }
+                  >
+                    <div
+                      style={
+                        styles.milestoneHeader
+                      }
+                    >
+                      <div>
+                        <span
+                          style={
+                            styles.milestoneLabel
+                          }
+                        >
+                          Próximo marco
+                        </span>
 
-                    {role === 'client' && (
-                      <p style={styles.paymentSecondaryText}>
-                        Após a confirmação do pagamento, o Kanban será
-                        liberado automaticamente.
-                      </p>
+                        <h3
+                          style={
+                            styles.milestoneTitle
+                          }
+                        >
+                          {
+                            selectedCurrentMilestone.title
+                          }
+                        </h3>
+                      </div>
+
+                      <span
+                        style={
+                          styles.milestoneAmount
+                        }
+                      >
+                        R${' '}
+                        {Number(
+                          selectedCurrentMilestone.amount ||
+                            0
+                        ).toLocaleString(
+                          'pt-BR',
+                          {
+                            minimumFractionDigits: 2
+                          }
+                        )}
+                      </span>
+                    </div>
+
+                    {selectedCurrentPayment?.status ===
+                    'paid' ? (
+                      <div
+                        style={
+                          styles.paymentSuccess
+                        }
+                      >
+                        <div
+                          style={
+                            styles.paymentIcon
+                          }
+                        >
+                          ✓
+                        </div>
+
+                        <h3
+                          style={
+                            styles.paymentTitle
+                          }
+                        >
+                          Pagamento confirmado
+                        </h3>
+
+                        <p
+                          style={
+                            styles.paymentText
+                          }
+                        >
+                          Este marco já foi
+                          pago com sucesso.
+                        </p>
+                      </div>
+                    ) : selectedCurrentPayment?.status ===
+                      'pending' ? (
+                      <div
+                        style={
+                          styles.paymentWaiting
+                        }
+                      >
+                        <div
+                          style={
+                            styles.paymentIcon
+                          }
+                        >
+                          $
+                        </div>
+
+                        <h3
+                          style={
+                            styles.paymentTitle
+                          }
+                        >
+                          Pagamento em processamento
+                        </h3>
+
+                        <p
+                          style={
+                            styles.paymentText
+                          }
+                        >
+                          O pagamento deste
+                          marco já foi iniciado.
+                          Aguarde a confirmação
+                          do Mercado Pago.
+                        </p>
+                      </div>
+                    ) : canPaySelectedMilestone ? (
+                      <div>
+                        <p
+                          style={
+                            styles.paymentText
+                          }
+                        >
+                          Este marco foi aprovado
+                          e está liberado para
+                          pagamento.
+                        </p>
+
+                        <button
+                          type="button"
+                          disabled={
+                            paymentLoading
+                          }
+                          onClick={() =>
+                            handlePayMilestone(
+                              selectedProject.id,
+                              selectedCurrentMilestone.id
+                            )
+                          }
+                          style={{
+                            ...styles.payMilestoneButton,
+                            opacity:
+                              paymentLoading
+                                ? 0.6
+                                : 1
+                          }}
+                        >
+                          {paymentLoading
+                            ? 'Abrindo pagamento...'
+                            : 'Pagar marco com Mercado Pago'}
+                        </button>
+                      </div>
+                    ) : role === 'freelancer' ? (
+                      <div
+                        style={
+                          styles.paymentWaiting
+                        }
+                      >
+                        <div
+                          style={
+                            styles.paymentIcon
+                          }
+                        >
+                          $
+                        </div>
+
+                        <h3
+                          style={
+                            styles.paymentTitle
+                          }
+                        >
+                          Aguardando pagamento
+                        </h3>
+
+                        <p
+                          style={
+                            styles.paymentText
+                          }
+                        >
+                          O cliente precisa
+                          concluir o pagamento
+                          deste marco.
+                        </p>
+                      </div>
+                    ) : (
+                      <div
+                        style={
+                          styles.paymentWaiting
+                        }
+                      >
+                        <div
+                          style={
+                            styles.paymentIcon
+                          }
+                        >
+                          ⏳
+                        </div>
+
+                        <h3
+                          style={
+                            styles.paymentTitle
+                          }
+                        >
+                          Aguardando aprovação
+                        </h3>
+
+                        <p
+                          style={
+                            styles.paymentText
+                          }
+                        >
+                          Este marco precisa
+                          ser aprovado antes
+                          de liberar o pagamento.
+                        </p>
+                      </div>
                     )}
                   </div>
+                ) : (
+                  <div
+                    style={
+                      styles.paymentWaiting
+                    }
+                  >
+                    <div
+                      style={
+                        styles.paymentIcon
+                      }
+                    >
+                      ✓
+                    </div>
+
+                    <h3
+                      style={
+                        styles.paymentTitle
+                      }
+                    >
+                      Nenhum pagamento pendente
+                    </h3>
+
+                    <p
+                      style={
+                        styles.paymentText
+                      }
+                    >
+                      Não existe um marco
+                      aguardando pagamento
+                      neste momento.
+                    </p>
+                  </div>
                 )}
+
+                <KanbanBoard
+                  projectId={
+                    selectedProject.id
+                  }
+                  isFreelancer={
+                    role === 'freelancer'
+                  }
+                  onMilestoneUpdated={() =>
+                    checkProjectPayments(
+                      activeProjects
+                    )
+                  }
+                />
               </>
             )}
           </>
@@ -336,201 +1108,266 @@ export default function Dashboard() {
       </div>
 
       <div style={styles.historySection}>
-        <div style={styles.historyHeader}>
+        <div
+          style={styles.historyHeader}
+        >
           <div>
-            <h2 style={styles.sectionTitle}>Histórico de Projetos</h2>
-            <p style={styles.historySubtitle}>
-              Projetos concluídos dos quais você participou.
+            <h2
+              style={
+                styles.sectionTitle
+              }
+            >
+              Histórico de Projetos
+            </h2>
+
+            <p
+              style={
+                styles.historySubtitle
+              }
+            >
+              Projetos concluídos dos quais
+              você participou.
             </p>
           </div>
 
-          <span style={styles.historyCount}>
-            {historyProjects.length} concluído(s)
+          <span
+            style={
+              styles.historyCount
+            }
+          >
+            {historyProjects.length}{' '}
+            concluído(s)
           </span>
         </div>
 
         {historyProjects.length === 0 ? (
-          <div style={styles.emptyState}>
-            <h3 style={styles.emptyTitle}>
+          <div
+            style={
+              styles.emptyState
+            }
+          >
+            <h3
+              style={
+                styles.emptyTitle
+              }
+            >
               Nenhum projeto finalizado
             </h3>
-            <p style={styles.emptyText}>
-              Quando um projeto for concluído, ele aparecerá nesta seção.
+
+            <p
+              style={
+                styles.emptyText
+              }
+            >
+              Quando um projeto for
+              concluído, ele aparecerá
+              nesta seção.
             </p>
           </div>
         ) : (
-          <div style={styles.historyList}>
-            {historyProjects.map(project => {
-              const acceptedProposal = project.proposals?.find(
-                proposal => proposal.status === 'accepted'
-              );
+          <div
+            style={
+              styles.historyList
+            }
+          >
+            {historyProjects.map(
+              project => {
+                const pendingReview =
+                  pendingReviews.find(
+                    review =>
+                      Number(
+                        review.projectId
+                      ) ===
+                      Number(project.id)
+                  );
 
-              const otherParticipant =
-                Number(project.clientId) === Number(user?.id)
-                  ? acceptedProposal?.freelancer?.name
-                  : project.client?.name;
-
-              const pendingReview = pendingReviews.find(
-                review => Number(review.projectId) === Number(project.id)
-              );
-
-              return (
-                <div key={project.id} style={styles.historyCard}>
-                  <div style={styles.historyCardTop}>
-                    <div style={styles.historyProjectInfo}>
-                      <h3 style={styles.historyProjectTitle}>
-                        {project.title}
-                      </h3>
-
-                      <p style={styles.historyParticipant}>
-                        {role === 'client'
-                          ? 'Freelancer: '
-                          : 'Cliente: '}
-                        <strong>{otherParticipant || 'Participante'}</strong>
-                      </p>
-                    </div>
-
-                    <span style={styles.completedBadge}>
-                      Concluído
-                    </span>
-                  </div>
-
-                  <div style={styles.historyDetails}>
-                    <span>
-                      Orçamento: R$ {Number(project.budget || 0).toLocaleString('pt-BR')}
-                    </span>
-
-                    <span>
-                      {project.milestones?.length || 0} etapa(s)
-                    </span>
-
-                    <span>
-                      {project.reviews?.length || 0} avaliação(ões)
-                    </span>
-                  </div>
-
-                  {project.reviews?.length > 0 && (
-                    <div style={styles.projectReviews}>
-                      <strong style={styles.projectReviewsTitle}>
-                        Avaliações deste projeto
-                      </strong>
-
-                      {project.reviews.map(review => (
-                        <div key={review.id} style={styles.reviewItem}>
-                          <div style={styles.reviewItemHeader}>
-                            <span style={styles.reviewAuthor}>
-                              {review.reviewer?.name || 'Usuário'}
-                            </span>
-
-                            <span style={styles.reviewStars}>
-                              {'★'.repeat(review.rating)}
-                              {'☆'.repeat(5 - review.rating)}
-                            </span>
-                          </div>
-
-                          {review.message && (
-                            <p style={styles.reviewMessage}>
-                              {review.message}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {pendingReview && (
-                    <button
-                      onClick={() => handleOpenReview(pendingReview)}
-                      style={styles.reviewButton}
+                return (
+                  <div
+                    key={project.id}
+                    style={
+                      styles.historyCard
+                    }
+                  >
+                    <div
+                      style={
+                        styles.historyCardTop
+                      }
                     >
-                      Avaliar {pendingReview.reviewee?.name || 'participante'}
-                    </button>
-                  )}
+                      <div>
+                        <h3
+                          style={
+                            styles.historyProjectTitle
+                          }
+                        >
+                          {project.title}
+                        </h3>
 
-                  {!pendingReview && (
-                    <span style={styles.reviewDone}>
-                      {project.reviews?.some(
-                        review => Number(review.reviewerId) === Number(user?.id)
-                      )
-                        ? 'Você já avaliou este projeto'
-                        : 'Avaliação não pendente'}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+                        <p
+                          style={
+                            styles.historyParticipant
+                          }
+                        >
+                          Projeto concluído
+                        </p>
+                      </div>
+
+                      <span
+                        style={
+                          styles.completedBadge
+                        }
+                      >
+                        Concluído
+                      </span>
+                    </div>
+
+                    {pendingReview ? (
+                      <button
+                        onClick={() =>
+                          handleOpenReview(
+                            pendingReview
+                          )
+                        }
+                        style={
+                          styles.reviewButton
+                        }
+                      >
+                        Avaliar participante
+                      </button>
+                    ) : (
+                      <span
+                        style={
+                          styles.reviewDone
+                        }
+                      >
+                        Avaliação não pendente
+                      </span>
+                    )}
+                  </div>
+                );
+              }
+            )}
           </div>
         )}
       </div>
 
       {selectedReview && (
-        <div style={styles.modalOverlay}>
-          <form onSubmit={handleSubmitReview} style={styles.reviewModal}>
+        <div
+          style={
+            styles.modalOverlay
+          }
+        >
+          <form
+            onSubmit={
+              handleSubmitReview
+            }
+            style={
+              styles.reviewModal
+            }
+          >
             <button
               type="button"
-              onClick={() => setSelectedReview(null)}
-              style={styles.modalClose}
+              onClick={() =>
+                setSelectedReview(null)
+              }
+              style={
+                styles.modalClose
+              }
             >
               ×
             </button>
 
-            <h2 style={styles.modalTitle}>Avaliar projeto</h2>
+            <h2
+              style={
+                styles.modalTitle
+              }
+            >
+              Avaliar projeto
+            </h2>
 
-            <p style={styles.modalSubtitle}>
-              Projeto: <strong>{selectedReview.projectTitle}</strong>
+            <p
+              style={
+                styles.modalSubtitle
+              }
+            >
+              Projeto:{' '}
+              <strong>
+                {
+                  selectedReview.projectTitle
+                }
+              </strong>
             </p>
 
-            <p style={styles.modalSubtitle}>
-              Avaliando: <strong>{selectedReview.reviewee?.name}</strong>
-            </p>
-
-            <label style={styles.formLabel}>
+            <label
+              style={
+                styles.formLabel
+              }
+            >
               Sua nota
             </label>
 
-            <div style={styles.ratingSelector}>
-              {[1, 2, 3, 4, 5].map(value => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => setRating(value)}
-                  style={{
-                    ...styles.ratingStar,
-                    color: value <= rating ? '#ffb400' : '#555'
-                  }}
-                  aria-label={`Nota ${value}`}
-                >
-                  ★
-                </button>
-              ))}
+            <div
+              style={
+                styles.ratingSelector
+              }
+            >
+              {[1, 2, 3, 4, 5].map(
+                value => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() =>
+                      setRating(value)
+                    }
+                    style={{
+                      ...styles.ratingStar,
+                      color:
+                        value <= rating
+                          ? '#ffb400'
+                          : '#555'
+                    }}
+                  >
+                    ★
+                  </button>
+                )
+              )}
             </div>
 
-            <label htmlFor="reviewMessage" style={styles.formLabel}>
+            <label
+              htmlFor="reviewMessage"
+              style={
+                styles.formLabel
+              }
+            >
               Comentário
             </label>
 
             <textarea
               id="reviewMessage"
               value={reviewMessage}
-              onChange={event => setReviewMessage(event.target.value)}
+              onChange={event =>
+                setReviewMessage(
+                  event.target.value
+                )
+              }
               maxLength={1000}
-              placeholder="Conte como foi sua experiência com este projeto..."
-              style={styles.reviewTextarea}
+              placeholder="Conte como foi sua experiência..."
+              style={
+                styles.reviewTextarea
+              }
             />
-
-            <span style={styles.characterCount}>
-              {reviewMessage.length}/1000 caracteres
-            </span>
 
             <button
               type="submit"
-              disabled={reviewLoading}
-              style={{
-                ...styles.submitReviewButton,
-                opacity: reviewLoading ? 0.6 : 1
-              }}
+              disabled={
+                reviewLoading
+              }
+              style={
+                styles.submitReviewButton
+              }
             >
-              {reviewLoading ? 'Enviando...' : 'Enviar avaliação'}
+              {reviewLoading
+                ? 'Enviando...'
+                : 'Enviar avaliação'}
             </button>
           </form>
         </div>
@@ -546,14 +1383,15 @@ const styles = {
     padding: '0 20px',
     color: '#fff'
   },
+
   loading: {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
     height: '50vh',
-    color: '#aaa',
-    fontSize: '16px'
+    color: '#aaa'
   },
+
   header: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -563,35 +1401,37 @@ const styles = {
     marginBottom: '30px',
     gap: '20px'
   },
+
   title: {
     fontSize: '28px',
-    margin: 0,
-    fontWeight: '700'
+    margin: 0
   },
+
   subtitle: {
     color: '#777',
-    margin: '7px 0 0',
-    fontSize: '14px'
+    margin: '7px 0 0'
   },
+
   userName: {
     color: '#ff6b00',
     fontWeight: '600'
   },
+
   badge: {
     backgroundColor: '#151515',
     border: '1px solid #292929',
     padding: '9px 16px',
     borderRadius: '20px',
-    fontSize: '13px',
-    color: '#888',
-    whiteSpace: 'nowrap'
+    color: '#888'
   },
+
   actions: {
     display: 'flex',
     gap: '10px',
     marginBottom: '36px',
     flexWrap: 'wrap'
   },
+
   primaryBtn: {
     backgroundColor: '#ff6b00',
     color: '#fff',
@@ -599,29 +1439,80 @@ const styles = {
     padding: '11px 18px',
     borderRadius: '6px',
     fontWeight: '600',
-    cursor: 'pointer',
-    fontSize: '13px'
+    cursor: 'pointer'
   },
+
   secondaryBtn: {
     backgroundColor: '#171717',
     color: '#ddd',
     border: '1px solid #303030',
     padding: '11px 18px',
     borderRadius: '6px',
-    fontWeight: '600',
-    cursor: 'pointer',
-    fontSize: '13px'
+    cursor: 'pointer'
   },
+
   chatBtn: {
     backgroundColor: '#151515',
     color: '#00c851',
     border: '1px solid #00c85140',
     padding: '11px 18px',
     borderRadius: '6px',
-    fontWeight: '600',
-    cursor: 'pointer',
+    cursor: 'pointer'
+  },
+
+  mpSection: {
+    backgroundColor: '#111',
+    border: '1px solid #242424',
+    borderRadius: '10px',
+    padding: '22px 25px',
+    marginBottom: '30px'
+  },
+
+  mpInfo: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '15px',
+    flexWrap: 'wrap'
+  },
+
+  mpTitle: {
+    margin: 0,
+    fontSize: '18px',
+    borderLeft: '3px solid #ff6b00',
+    paddingLeft: '10px'
+  },
+
+  mpDescription: {
+    margin: '8px 0 0 13px',
+    color: '#777',
     fontSize: '13px'
   },
+
+  mpBadge: {
+    border: '1px solid',
+    borderRadius: '20px',
+    padding: '6px 11px',
+    fontSize: '12px'
+  },
+
+  mpSuccess: {
+    margin: '16px 0 0 13px',
+    color: '#00c851',
+    fontSize: '13px'
+  },
+
+  mpButton: {
+    marginTop: '18px',
+    backgroundColor: '#ff6b00',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '11px 18px',
+    fontWeight: '600',
+    cursor: 'pointer'
+  },
+
   kanbanSection: {
     backgroundColor: '#111',
     border: '1px solid #242424',
@@ -629,28 +1520,29 @@ const styles = {
     padding: '25px',
     marginBottom: '30px'
   },
+
   sectionTitle: {
     fontSize: '18px',
     margin: '0 0 12px',
     borderLeft: '3px solid #ff6b00',
-    paddingLeft: '10px',
-    fontWeight: '600'
+    paddingLeft: '10px'
   },
+
   projectTabs: {
     display: 'flex',
     gap: '8px',
     marginBottom: '22px',
     flexWrap: 'wrap'
   },
+
   tabBtn: {
     backgroundColor: 'transparent',
     border: '1px solid',
     padding: '7px 14px',
     borderRadius: '20px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: '500'
+    cursor: 'pointer'
   },
+
   projectHeader: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -661,31 +1553,120 @@ const styles = {
     borderBottom: '1px solid #222',
     flexWrap: 'wrap'
   },
+
   projectTitle: {
     margin: 0,
-    fontSize: '17px',
-    fontWeight: '600'
+    fontSize: '17px'
   },
+
   projectDescription: {
     margin: '6px 0 0',
-    color: '#666',
-    fontSize: '13px'
+    color: '#666'
   },
+
   projectStatus: {
     border: '1px solid',
     padding: '6px 11px',
     borderRadius: '20px',
+    fontSize: '11px'
+  },
+
+  milestoneCard: {
+    backgroundColor: '#151515',
+    border: '1px solid #292929',
+    borderRadius: '8px',
+    padding: '22px',
+    marginBottom: '20px'
+  },
+
+  milestoneHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '15px',
+    flexWrap: 'wrap',
+    marginBottom: '20px'
+  },
+
+  milestoneLabel: {
+    display: 'block',
+    color: '#ff6b00',
     fontSize: '11px',
     fontWeight: '600',
-    whiteSpace: 'nowrap'
+    textTransform: 'uppercase',
+    marginBottom: '5px'
   },
+
+  milestoneTitle: {
+    margin: 0,
+    color: '#fff',
+    fontSize: '18px'
+  },
+
+  milestoneAmount: {
+    color: '#00c851',
+    fontSize: '17px',
+    fontWeight: '700'
+  },
+
+  payMilestoneButton: {
+    marginTop: '18px',
+    backgroundColor: '#ff6b00',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '12px 20px',
+    fontWeight: '600',
+    cursor: 'pointer'
+  },
+
+  milestoneSuccess: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '15px',
+    backgroundColor: '#0d1a12',
+    border: '1px solid #00c85140',
+    borderRadius: '8px',
+    padding: '18px',
+    marginBottom: '20px',
+    flexWrap: 'wrap'
+  },
+
+  milestoneSuccessTitle: {
+    display: 'block',
+    color: '#00c851'
+  },
+
+  milestoneSuccessText: {
+    margin: '5px 0 0',
+    color: '#777'
+  },
+
+  paidBadge: {
+    color: '#00c851',
+    backgroundColor: '#00c85115',
+    border: '1px solid #00c85140',
+    borderRadius: '20px',
+    padding: '6px 11px'
+  },
+
   paymentWaiting: {
     backgroundColor: '#15120f',
     border: '1px solid #3a2b1c',
     borderRadius: '8px',
-    padding: '45px 25px',
+    padding: '40px 25px',
     textAlign: 'center'
   },
+
+  paymentSuccess: {
+    backgroundColor: '#0d1a12',
+    border: '1px solid #00c85140',
+    borderRadius: '8px',
+    padding: '30px 25px',
+    textAlign: 'center'
+  },
+
   paymentIcon: {
     width: '44px',
     height: '44px',
@@ -700,11 +1681,13 @@ const styles = {
     fontSize: '18px',
     fontWeight: '700'
   },
+
   paymentTitle: {
     margin: '0 0 8px',
     fontSize: '17px',
     color: '#fff'
   },
+
   paymentText: {
     margin: '0 auto',
     maxWidth: '500px',
@@ -712,35 +1695,33 @@ const styles = {
     fontSize: '14px',
     lineHeight: '1.6'
   },
-  paymentSecondaryText: {
-    margin: '10px auto 0',
-    maxWidth: '500px',
-    color: '#666',
-    fontSize: '12px',
-    lineHeight: '1.5'
-  },
+
   emptyState: {
     padding: '35px 25px',
     textAlign: 'center',
     border: '1px dashed #292929',
     borderRadius: '8px'
   },
+
   emptyTitle: {
     margin: '0 0 8px',
     fontSize: '16px',
     color: '#ddd'
   },
+
   emptyText: {
     margin: 0,
     color: '#666',
     fontSize: '13px'
   },
+
   historySection: {
     backgroundColor: '#111',
     border: '1px solid #242424',
     borderRadius: '10px',
     padding: '25px'
   },
+
   historyHeader: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -749,30 +1730,33 @@ const styles = {
     marginBottom: '22px',
     flexWrap: 'wrap'
   },
+
   historySubtitle: {
     margin: '6px 0 0 13px',
     color: '#777',
     fontSize: '13px'
   },
+
   historyCount: {
     color: '#00c851',
     backgroundColor: '#00c85115',
     border: '1px solid #00c85140',
     borderRadius: '20px',
-    padding: '6px 11px',
-    fontSize: '12px',
-    whiteSpace: 'nowrap'
+    padding: '6px 11px'
   },
+
   historyList: {
     display: 'grid',
     gap: '14px'
   },
+
   historyCard: {
     backgroundColor: '#171717',
     border: '1px solid #292929',
     borderRadius: '8px',
     padding: '18px'
   },
+
   historyCardTop: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -780,74 +1764,26 @@ const styles = {
     gap: '15px',
     flexWrap: 'wrap'
   },
-  historyProjectInfo: {
-    minWidth: 0
-  },
+
   historyProjectTitle: {
     margin: 0,
     fontSize: '16px',
     color: '#fff'
   },
+
   historyParticipant: {
     margin: '7px 0 0',
-    color: '#888',
-    fontSize: '13px'
+    color: '#888'
   },
+
   completedBadge: {
     color: '#00c851',
     backgroundColor: '#00c85115',
     border: '1px solid #00c85140',
     borderRadius: '20px',
-    padding: '5px 10px',
-    fontSize: '11px',
-    fontWeight: '600'
+    padding: '5px 10px'
   },
-  historyDetails: {
-    display: 'flex',
-    gap: '18px',
-    flexWrap: 'wrap',
-    marginTop: '16px',
-    paddingTop: '13px',
-    borderTop: '1px solid #292929',
-    color: '#888',
-    fontSize: '12px'
-  },
-  projectReviews: {
-    marginTop: '16px',
-    paddingTop: '14px',
-    borderTop: '1px solid #292929'
-  },
-  projectReviewsTitle: {
-    display: 'block',
-    color: '#ddd',
-    fontSize: '13px',
-    marginBottom: '10px'
-  },
-  reviewItem: {
-    padding: '10px 0',
-    borderBottom: '1px solid #252525'
-  },
-  reviewItemHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: '12px'
-  },
-  reviewAuthor: {
-    color: '#aaa',
-    fontSize: '12px',
-    fontWeight: '600'
-  },
-  reviewStars: {
-    color: '#ffb400',
-    letterSpacing: '2px',
-    fontSize: '13px'
-  },
-  reviewMessage: {
-    margin: '7px 0 0',
-    color: '#999',
-    fontSize: '13px',
-    lineHeight: '1.5'
-  },
+
   reviewButton: {
     marginTop: '16px',
     backgroundColor: '#ff6b00',
@@ -855,16 +1791,16 @@ const styles = {
     border: 'none',
     borderRadius: '6px',
     padding: '10px 15px',
-    fontSize: '12px',
-    fontWeight: '600',
     cursor: 'pointer'
   },
+
   reviewDone: {
     display: 'inline-block',
     marginTop: '15px',
     color: '#00c851',
     fontSize: '12px'
   },
+
   modalOverlay: {
     position: 'fixed',
     inset: 0,
@@ -875,6 +1811,7 @@ const styles = {
     alignItems: 'center',
     padding: '20px'
   },
+
   reviewModal: {
     position: 'relative',
     width: '100%',
@@ -882,9 +1819,9 @@ const styles = {
     backgroundColor: '#171717',
     border: '1px solid #333',
     borderRadius: '12px',
-    padding: '28px',
-    boxShadow: '0 20px 60px #00000080'
+    padding: '28px'
   },
+
   modalClose: {
     position: 'absolute',
     top: '12px',
@@ -895,16 +1832,19 @@ const styles = {
     fontSize: '28px',
     cursor: 'pointer'
   },
+
   modalTitle: {
     margin: '0 0 15px',
     color: '#fff',
     fontSize: '21px'
   },
+
   modalSubtitle: {
     margin: '7px 0',
     color: '#999',
     fontSize: '13px'
   },
+
   formLabel: {
     display: 'block',
     margin: '20px 0 8px',
@@ -912,10 +1852,12 @@ const styles = {
     fontSize: '13px',
     fontWeight: '600'
   },
+
   ratingSelector: {
     display: 'flex',
     gap: '8px'
   },
+
   ratingStar: {
     border: 'none',
     background: 'transparent',
@@ -923,6 +1865,7 @@ const styles = {
     cursor: 'pointer',
     padding: '0 2px'
   },
+
   reviewTextarea: {
     width: '100%',
     minHeight: '110px',
@@ -933,16 +1876,9 @@ const styles = {
     borderRadius: '6px',
     padding: '12px',
     color: '#fff',
-    fontSize: '13px',
-    outline: 'none'
+    fontSize: '13px'
   },
-  characterCount: {
-    display: 'block',
-    textAlign: 'right',
-    color: '#666',
-    fontSize: '11px',
-    marginTop: '5px'
-  },
+
   submitReviewButton: {
     width: '100%',
     marginTop: '20px',
