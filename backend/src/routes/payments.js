@@ -4,27 +4,7 @@ const crypto = require('crypto');
 const prisma = require('../config/database');
 const authMiddleware = require('../middlewares/auth');
 
-const {
-  MercadoPagoConfig,
-  Preference,
-  Payment
-} = require('mercadopago');
-
-const MP_REDIRECT_URI = process.env.MP_REDIRECT_URI;
-
-function getOAuthConfig() {
-  const clientId = process.env.MP_CLIENT_ID;
-  const clientSecret = process.env.MP_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret || !MP_REDIRECT_URI) {
-    throw new Error('Configurações OAuth do Mercado Pago ausentes.');
-  }
-
-  return {
-    clientId,
-    clientSecret
-  };
-}
+const PIX_KEY_TYPES = ['cpf', 'cnpj', 'email', 'phone', 'random'];
 
 function isMilestoneCompleted(status) {
   const normalized = String(status || '')
@@ -48,112 +28,507 @@ function isMilestoneCompleted(status) {
   ].includes(normalized);
 }
 
-function getMarketplaceFee(amount) {
-  const percentage = Number(process.env.MP_PLATFORM_FEE_PERCENT || 0);
-
-  if (!Number.isFinite(percentage) || percentage <= 0) {
-    return 0;
-  }
-
-  const fee = amount * (percentage / 100);
-
-  return Number(fee.toFixed(2));
+function onlyDigits(value) {
+  return String(value || '').replace(/\D/g, '');
 }
 
-async function refreshSellerToken(account) {
-  if (!account?.mpRefreshToken) {
-    throw new Error(
-      'A conta Mercado Pago do freelancer não possui refresh token.'
-    );
+function normalizePixKey(type, rawKey) {
+  const key = String(rawKey || '').trim();
+
+  if (type === 'cpf') {
+    const digits = onlyDigits(key);
+    return digits.length === 11 ? digits : null;
   }
 
-  const { clientId, clientSecret } = getOAuthConfig();
+  if (type === 'cnpj') {
+    const digits = onlyDigits(key);
+    return digits.length === 14 ? digits : null;
+  }
 
-  const response = await fetch('https://api.mercadopago.com/oauth/token', {
+  if (type === 'email') {
+    const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key) && key.length <= 77;
+    return valid ? key.toLowerCase() : null;
+  }
+
+  if (type === 'phone') {
+    const digits = onlyDigits(key);
+
+    if (digits.length === 10 || digits.length === 11) {
+      return `+55${digits}`;
+    }
+
+    if ((digits.length === 12 || digits.length === 13) && digits.startsWith('55')) {
+      return `+${digits}`;
+    }
+
+    return null;
+  }
+
+  if (type === 'random') {
+    const valid =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(key);
+
+    return valid ? key.toLowerCase() : null;
+  }
+
+  return null;
+}
+
+function maskPixKey(key) {
+  const value = String(key || '');
+
+  if (value.length <= 6) {
+    return '***';
+  }
+
+  return `${value.slice(0, 3)}***${value.slice(-3)}`;
+}
+
+function getMercadoPagoToken() {
+  const token = process.env.MERCADOPAGO_ACCESS_TOKEN;
+
+  if (!token) {
+    throw new Error('MERCADOPAGO_ACCESS_TOKEN não configurado.');
+  }
+
+  return token;
+}
+
+async function createPixOrder({ paymentId, amount, payer }) {
+  const token = getMercadoPagoToken();
+  const testMode = process.env.MP_PIX_TEST_MODE === 'true';
+  const value = Number(amount).toFixed(2);
+
+  const payerData = testMode
+    ? {
+        email: 'test_user_br@testuser.com',
+        first_name: 'APRO'
+      }
+    : {
+        email: payer.email,
+        first_name: String(payer.name || '').split(' ')[0] || 'Cliente'
+      };
+
+  const response = await fetch('https://api.mercadopago.com/v1/orders', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+      'X-Idempotency-Key': crypto.randomUUID()
     },
     body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'refresh_token',
-      refresh_token: account.mpRefreshToken
+      type: 'online',
+      processing_mode: 'automatic',
+      external_reference: String(paymentId),
+      total_amount: value,
+      payer: payerData,
+      transactions: {
+        payments: [
+          {
+            amount: value,
+            payment_method: {
+              id: 'pix',
+              type: 'bank_transfer'
+            }
+          }
+        ]
+      }
     })
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    console.error('Erro ao renovar token Mercado Pago:', {
+    console.error('Erro ao criar order Pix no Mercado Pago:', {
       status: response.status,
-      error: data.error,
-      message: data.message
+      body: data
     });
 
-    throw new Error(
-      'Não foi possível renovar a conexão Mercado Pago do freelancer.'
-    );
+    const error = new Error('Falha ao criar order Pix.');
+    error.status = 502;
+    error.publicMessage =
+      'O Mercado Pago não conseguiu gerar o Pix. Tente novamente.';
+
+    throw error;
   }
 
-  if (!data.access_token) {
-    throw new Error('O Mercado Pago não retornou um novo access token.');
-  }
+  return data;
+}
 
-  const expiresAt = new Date(
-    Date.now() + Number(data.expires_in || 0) * 1000
+async function fetchPixOrder(orderId) {
+  const token = getMercadoPagoToken();
+
+  const response = await fetch(
+    `https://api.mercadopago.com/v1/orders/${encodeURIComponent(orderId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    }
   );
 
-  const updatedAccount = await prisma.mercadoPagoAccount.update({
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error('Erro ao consultar order Pix no Mercado Pago:', {
+      status: response.status,
+      body: data
+    });
+
+    throw new Error('Não foi possível consultar o pagamento no Mercado Pago.');
+  }
+
+  return data;
+}
+
+async function notifyPaid(payment) {
+  const project = await prisma.project.findUnique({
     where: {
-      userId: account.userId
+      id: payment.projectId
+    },
+    select: {
+      title: true
+    }
+  });
+
+  if (!project) {
+    return;
+  }
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        userId: Number(payment.payerId),
+        type: 'payment_confirmed',
+        message: `O pagamento do marco ${payment.milestoneId} do projeto "${project.title}" foi confirmado.`
+      },
+      {
+        userId: Number(payment.receiverId),
+        type: 'payment_confirmed',
+        message: `O pagamento do marco ${payment.milestoneId} do projeto "${project.title}" foi confirmado e o repasse foi registrado para a sua chave Pix.`
+      }
+    ]
+  });
+}
+
+async function completeProjectIfAllPaid(projectId) {
+  const milestones = await prisma.milestone.findMany({
+    where: {
+      projectId
+    },
+    select: {
+      id: true
+    }
+  });
+
+  if (milestones.length === 0) {
+    return false;
+  }
+
+  const paidPayments = await prisma.payment.findMany({
+    where: {
+      projectId,
+      status: 'paid',
+      milestoneId: {
+        in: milestones.map(item => item.id)
+      }
+    },
+    select: {
+      milestoneId: true
+    }
+  });
+
+  const paidIds = new Set(
+    paidPayments.map(item => Number(item.milestoneId))
+  );
+
+  const allPaid = milestones.every(item => paidIds.has(Number(item.id)));
+
+  if (!allPaid) {
+    return false;
+  }
+
+  const result = await prisma.project.updateMany({
+    where: {
+      id: projectId,
+      status: {
+        not: 'completed'
+      }
     },
     data: {
-      mpAccessToken: data.access_token,
-      mpRefreshToken: data.refresh_token || account.mpRefreshToken,
-      mpTokenExpiresAt: expiresAt,
-      mpConnectedAt: account.mpConnectedAt || new Date()
+      status: 'completed'
     }
   });
 
-  return updatedAccount;
-}
+  if (result.count !== 1) {
+    return false;
+  }
 
-async function getSellerAccount(freelancerId) {
-  let account = await prisma.mercadoPagoAccount.findUnique({
+  const project = await prisma.project.findUnique({
     where: {
-      userId: Number(freelancerId)
+      id: projectId
+    },
+    select: {
+      title: true,
+      clientId: true,
+      proposals: {
+        where: {
+          status: 'accepted'
+        },
+        select: {
+          freelancerId: true
+        }
+      }
     }
   });
 
-  if (!account) {
-    throw new Error('O freelancer ainda não conectou uma conta Mercado Pago.');
+  if (project) {
+    const notifications = [
+      {
+        userId: Number(project.clientId),
+        type: 'project_completed',
+        message: `O projeto "${project.title}" foi concluído. Avalie o freelancer.`
+      }
+    ];
+
+    if (project.proposals[0]) {
+      notifications.push({
+        userId: Number(project.proposals[0].freelancerId),
+        type: 'project_completed',
+        message: `O projeto "${project.title}" foi concluído. Avalie o cliente.`
+      });
+    }
+
+    await prisma.notification.createMany({
+      data: notifications
+    });
   }
 
-  if (!account.mpAccessToken || !account.mpRefreshToken) {
-    throw new Error('A conexão Mercado Pago do freelancer está incompleta.');
-  }
-
-  const expiresAt = account.mpTokenExpiresAt
-    ? new Date(account.mpTokenExpiresAt).getTime()
-    : 0;
-
-  const shouldRefresh = expiresAt > 0 && expiresAt <= Date.now() + 5 * 60 * 1000;
-
-  if (shouldRefresh) {
-    account = await refreshSellerToken(account);
-  }
-
-  return account;
+  return true;
 }
 
-function createMercadoPagoClient(accessToken) {
-  return new MercadoPagoConfig({
-    accessToken
-  });
+async function syncPixPayment(payment) {
+  if (!payment || payment.status !== 'pending' || !payment.mpOrderId) {
+    return payment;
+  }
+
+  const order = await fetchPixOrder(payment.mpOrderId);
+  const mpPayment = order.transactions?.payments?.[0];
+
+  const orderStatus = String(order.status || '').toLowerCase();
+  const paymentStatus = String(mpPayment?.status || '').toLowerCase();
+
+  const approvedStatuses = ['processed', 'approved', 'accredited'];
+
+  const approved =
+    approvedStatuses.includes(orderStatus) ||
+    approvedStatuses.includes(paymentStatus);
+
+  const failedStatuses = ['failed', 'canceled', 'cancelled', 'expired'];
+
+  const failed =
+    failedStatuses.includes(orderStatus) ||
+    failedStatuses.includes(paymentStatus);
+
+  if (approved) {
+    const receiver = await prisma.user.findUnique({
+      where: {
+        id: Number(payment.receiverId)
+      },
+      select: {
+        pixKey: true
+      }
+    });
+
+    const now = new Date();
+
+    const result = await prisma.payment.updateMany({
+      where: {
+        id: payment.id,
+        status: 'pending'
+      },
+      data: {
+        status: 'paid',
+        mpPaymentId: mpPayment?.id
+          ? String(mpPayment.id)
+          : payment.mpPaymentId,
+        paymentMethod: 'pix',
+        paidAt: now,
+        payoutStatus: 'released',
+        payoutAt: now,
+        payoutPixKey: receiver?.pixKey || null
+      }
+    });
+
+    if (result.count === 1) {
+      await notifyPaid(payment).catch(error => {
+        console.error('Erro ao criar notificações de pagamento:', error);
+      });
+
+      await completeProjectIfAllPaid(payment.projectId).catch(error => {
+        console.error('Erro ao concluir o projeto:', error);
+      });
+    }
+
+    return prisma.payment.findUnique({
+      where: {
+        id: payment.id
+      }
+    });
+  }
+
+  if (failed) {
+    await prisma.payment.updateMany({
+      where: {
+        id: payment.id,
+        status: 'pending'
+      },
+      data: {
+        status: orderStatus === 'failed' || paymentStatus === 'failed'
+          ? 'rejected'
+          : 'cancelled'
+      }
+    });
+
+    return prisma.payment.findUnique({
+      where: {
+        id: payment.id
+      }
+    });
+  }
+
+  return payment;
 }
 
-router.post('/criar', authMiddleware, async (req, res, next) => {
+function buildPixResponse(payment) {
+  return {
+    paymentId: payment.id,
+    milestoneId: payment.milestoneId,
+    amount: Number(payment.amount),
+    status: payment.status,
+    payoutStatus: payment.payoutStatus || null,
+    pix: {
+      qrCode: payment.pixQrCode || '',
+      qrCodeBase64: payment.pixQrCodeBase64 || '',
+      ticketUrl: payment.pixTicketUrl || ''
+    }
+  };
+}
+
+function stripPixData(payment) {
+  const { pixQrCode, pixQrCodeBase64, pixTicketUrl, ...rest } = payment;
+
+  return rest;
+}
+
+router.get('/pix-key', authMiddleware, async (req, res) => {
+  try {
+    const userId = Number(req.userId);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({
+        message: 'Usuário não autenticado.'
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId
+      },
+      select: {
+        role: true,
+        pixKey: true,
+        pixKeyType: true
+      }
+    });
+
+    if (!user || user.role !== 'freelancer') {
+      return res.status(403).json({
+        message: 'Somente freelancers possuem chave Pix para recebimento.'
+      });
+    }
+
+    return res.json({
+      registered: Boolean(user.pixKey),
+      pixKeyType: user.pixKeyType || null,
+      pixKeyMasked: user.pixKey ? maskPixKey(user.pixKey) : ''
+    });
+  } catch (error) {
+    console.error('Erro ao consultar chave Pix:', error);
+
+    return res.status(500).json({
+      message: 'Não foi possível consultar a chave Pix.'
+    });
+  }
+});
+
+router.put('/pix-key', authMiddleware, async (req, res) => {
+  try {
+    const userId = Number(req.userId);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      return res.status(401).json({
+        message: 'Usuário não autenticado.'
+      });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId
+      },
+      select: {
+        id: true,
+        role: true
+      }
+    });
+
+    if (!user || user.role !== 'freelancer') {
+      return res.status(403).json({
+        message: 'Somente freelancers podem cadastrar chave Pix.'
+      });
+    }
+
+    const type = String(req.body.pixKeyType || '').toLowerCase();
+
+    if (!PIX_KEY_TYPES.includes(type)) {
+      return res.status(400).json({
+        message: 'Tipo de chave Pix inválido.'
+      });
+    }
+
+    const key = normalizePixKey(type, req.body.pixKey);
+
+    if (!key) {
+      return res.status(400).json({
+        message: 'Chave Pix inválida para o tipo selecionado.'
+      });
+    }
+
+    await prisma.user.update({
+      where: {
+        id: userId
+      },
+      data: {
+        pixKey: key,
+        pixKeyType: type
+      }
+    });
+
+    return res.json({
+      registered: true,
+      pixKeyType: type,
+      pixKeyMasked: maskPixKey(key)
+    });
+  } catch (error) {
+    console.error('Erro ao salvar chave Pix:', error);
+
+    return res.status(500).json({
+      message: 'Não foi possível salvar a chave Pix.'
+    });
+  }
+});
+
+router.post('/criar', authMiddleware, async (req, res) => {
   try {
     const projectId = Number(req.body.projectId);
     const milestoneId = Number(req.body.milestoneId);
@@ -177,12 +552,6 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
       });
     }
 
-    if (!process.env.BACKEND_URL || !process.env.FRONTEND_URL) {
-      return res.status(500).json({
-        message: 'BACKEND_URL ou FRONTEND_URL não configuradas.'
-      });
-    }
-
     const project = await prisma.project.findUnique({
       where: {
         id: projectId
@@ -203,14 +572,8 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
           where: {
             status: 'accepted'
           },
-          include: {
-            freelancer: {
-              select: {
-                id: true,
-                name: true,
-                email: true
-              }
-            }
+          select: {
+            freelancerId: true
           }
         }
       }
@@ -247,10 +610,9 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
       });
     }
 
-    const acceptedProposal = project.proposals[0];
-    const freelancer = acceptedProposal?.freelancer;
+    const freelancerId = project.proposals[0]?.freelancerId;
 
-    if (!freelancer) {
+    if (!freelancerId) {
       return res.status(400).json({
         message: 'Nenhum freelancer foi contratado neste projeto.'
       });
@@ -271,12 +633,6 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
     const milestoneIndex = orderedMilestones.findIndex(
       item => Number(item.id) === milestoneId
     );
-
-    if (milestoneIndex === -1) {
-      return res.status(404).json({
-        message: 'Marco não encontrado.'
-      });
-    }
 
     const previousMilestones = orderedMilestones.slice(0, milestoneIndex);
 
@@ -313,7 +669,7 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
       }
     }
 
-    const existingPayment = await prisma.payment.findFirst({
+    let existingPayment = await prisma.payment.findFirst({
       where: {
         projectId,
         milestoneId,
@@ -326,6 +682,14 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
       }
     });
 
+    if (existingPayment?.status === 'pending') {
+      try {
+        existingPayment = await syncPixPayment(existingPayment);
+      } catch (error) {
+        console.error('Erro ao sincronizar pagamento pendente:', error);
+      }
+    }
+
     if (existingPayment?.status === 'paid') {
       return res.status(400).json({
         message: 'Este marco já foi pago.',
@@ -335,20 +699,32 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
     }
 
     if (existingPayment?.status === 'pending') {
-      return res.status(409).json({
-        message: 'Já existe um pagamento pendente para este marco.',
-        paymentId: existingPayment.id,
-        milestoneId
-      });
+      if (existingPayment.pixQrCode) {
+        return res.json(buildPixResponse(existingPayment));
+      }
+
+      await prisma.payment
+        .delete({
+          where: {
+            id: existingPayment.id
+          }
+        })
+        .catch(() => {});
     }
 
-    let sellerAccount;
+    const freelancer = await prisma.user.findUnique({
+      where: {
+        id: Number(freelancerId)
+      },
+      select: {
+        id: true,
+        pixKey: true
+      }
+    });
 
-    try {
-      sellerAccount = await getSellerAccount(freelancer.id);
-    } catch (error) {
+    if (!freelancer?.pixKey) {
       return res.status(400).json({
-        message: error.message
+        message: 'O freelancer ainda não cadastrou a chave Pix para receber.'
       });
     }
 
@@ -364,60 +740,38 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
     });
 
     try {
-      const mpClient = createMercadoPagoClient(sellerAccount.mpAccessToken);
-      const preference = new Preference(mpClient);
-      const marketplaceFee = getMarketplaceFee(milestoneAmount);
-
-      const preferenceBody = {
-        items: [
-          {
-            title: `Pagamento do marco: ${
-              milestone.title || `Marco ${milestoneIndex + 1}`
-            }`,
-            quantity: 1,
-            unit_price: Number(milestoneAmount.toFixed(2)),
-            currency_id: 'BRL'
-          }
-        ],
-        payer: {
-          name: project.client.name,
-          email: project.client.email
-        },
-        back_urls: {
-          success: `${process.env.BACKEND_URL}/payments/sucesso`,
-          failure: `${process.env.BACKEND_URL}/payments/falha`,
-          pending: `${process.env.BACKEND_URL}/payments/pendente`
-        },
-        auto_return: 'approved',
-        notification_url: `${process.env.BACKEND_URL}/payments/webhook?paymentId=${payment.id}`,
-        external_reference: String(payment.id)
-      };
-
-      if (marketplaceFee > 0) {
-        preferenceBody.marketplace_fee = marketplaceFee;
-      }
-
-      const prefData = await preference.create({
-        body: preferenceBody
+      const order = await createPixOrder({
+        paymentId: payment.id,
+        amount: milestoneAmount,
+        payer: project.client
       });
+
+      const mpPayment = order.transactions?.payments?.[0];
+      const method = mpPayment?.payment_method || {};
 
       const updatedPayment = await prisma.payment.update({
         where: {
           id: payment.id
         },
         data: {
-          mpPreferenceId: String(prefData.id)
+          mpOrderId: String(order.id),
+          mpPaymentId: mpPayment?.id ? String(mpPayment.id) : null,
+          paymentMethod: 'pix',
+          pixQrCode: method.qr_code || null,
+          pixQrCodeBase64: method.qr_code_base64 || null,
+          pixTicketUrl: method.ticket_url || null
         }
       });
 
-      return res.json({
-        preferenceId: prefData.id,
-        initPoint: prefData.init_point,
-        sandboxInitPoint: prefData.sandbox_init_point,
-        paymentId: updatedPayment.id,
-        milestoneId,
-        amount: Number(milestoneAmount.toFixed(2))
-      });
+      let current = updatedPayment;
+
+      try {
+        current = await syncPixPayment(updatedPayment);
+      } catch (error) {
+        console.error('Erro ao sincronizar pagamento recém-criado:', error);
+      }
+
+      return res.json(buildPixResponse(current));
     } catch (error) {
       await prisma.payment
         .delete({
@@ -430,236 +784,86 @@ router.post('/criar', authMiddleware, async (req, res, next) => {
       throw error;
     }
   } catch (error) {
-    console.error('Erro ao criar pagamento:', error);
+    console.error('Erro ao criar pagamento Pix:', error);
 
-    next(error);
+    return res.status(error.status || 500).json({
+      message:
+        error.publicMessage || 'Não foi possível gerar o pagamento Pix.'
+    });
   }
 });
 
-router.get('/sucesso', (req, res) => {
+router.get('/:id/status', authMiddleware, async (req, res) => {
   try {
-    const paymentId = req.query.external_reference || '';
+    const paymentId = Number(req.params.id);
+    const userId = Number(req.userId);
 
-    const mpPaymentId = req.query.payment_id || req.query.collection_id || '';
+    if (!Number.isInteger(paymentId) || paymentId <= 0) {
+      return res.status(400).json({
+        message: 'ID do pagamento inválido.'
+      });
+    }
 
-    const status =
-      req.query.status || req.query.collection_status || 'approved';
-
-    const params = new URLSearchParams({
-      paymentId: String(paymentId),
-      mpPaymentId: String(mpPaymentId),
-      status: String(status)
+    let payment = await prisma.payment.findUnique({
+      where: {
+        id: paymentId
+      }
     });
 
-    return res.redirect(
-      `${process.env.FRONTEND_URL}/pagamento/sucesso?${params.toString()}`
-    );
+    if (!payment) {
+      return res.status(404).json({
+        message: 'Pagamento não encontrado.'
+      });
+    }
+
+    if (
+      Number(payment.payerId) !== userId &&
+      Number(payment.receiverId) !== userId
+    ) {
+      return res.status(403).json({
+        message: 'Você não tem permissão para consultar este pagamento.'
+      });
+    }
+
+    try {
+      payment = await syncPixPayment(payment);
+    } catch (error) {
+      console.error('Erro ao sincronizar pagamento:', error);
+    }
+
+    return res.json({
+      paymentId: payment.id,
+      status: payment.status,
+      payoutStatus: payment.payoutStatus || null
+    });
   } catch (error) {
-    console.error('Erro ao retornar do Mercado Pago:', error);
+    console.error('Erro ao consultar status do pagamento:', error);
 
-    return res.redirect(`${process.env.FRONTEND_URL}/pagamento/falha`);
+    return res.status(500).json({
+      message: 'Não foi possível consultar o pagamento.'
+    });
   }
-});
-
-router.get('/falha', (req, res) => {
-  const paymentId = req.query.external_reference || '';
-
-  const params = new URLSearchParams({
-    paymentId: String(paymentId)
-  });
-
-  return res.redirect(
-    `${process.env.FRONTEND_URL}/pagamento/falha?${params.toString()}`
-  );
-});
-
-router.get('/pendente', (req, res) => {
-  const paymentId = req.query.external_reference || '';
-
-  const mpPaymentId = req.query.payment_id || req.query.collection_id || '';
-
-  const params = new URLSearchParams({
-    paymentId: String(paymentId),
-    mpPaymentId: String(mpPaymentId)
-  });
-
-  return res.redirect(
-    `${process.env.FRONTEND_URL}/pagamento/pendente?${params.toString()}`
-  );
 });
 
 router.post('/webhook', async (req, res) => {
   try {
-    console.log('Webhook Mercado Pago:', {
-      body: req.body,
-      query: req.query
-    });
+    const rawId =
+      req.body?.data?.id || req.query['data.id'] || req.query.id;
 
-    const type = req.body?.type || req.query.type || req.query.topic;
-    const mpId = req.body?.data?.id || req.query['data.id'] || req.query.id;
+    const orderId = rawId ? String(rawId) : '';
 
-    if (type !== 'payment' || !mpId) {
+    if (!orderId) {
       return res.sendStatus(200);
     }
 
-    const internalId = Number(req.query.paymentId);
-
-    let payment = null;
-
-    if (Number.isInteger(internalId) && internalId > 0) {
-      payment = await prisma.payment.findUnique({
-        where: {
-          id: internalId
-        }
-      });
-    }
-
-    if (!payment) {
-      payment = await prisma.payment.findFirst({
-        where: {
-          mpPaymentId: String(mpId)
-        }
-      });
-    }
-
-    if (!payment) {
-      console.log('Pagamento interno não localizado para o webhook:', mpId);
-
-      return res.sendStatus(200);
-    }
-
-    const sellerAccount = await prisma.mercadoPagoAccount.findUnique({
+    const payment = await prisma.payment.findFirst({
       where: {
-        userId: Number(payment.receiverId)
+        mpOrderId: orderId
       }
     });
 
-    if (!sellerAccount?.mpAccessToken) {
-      console.error(
-        'Conta Mercado Pago do vendedor não encontrada para o webhook.',
-        {
-          receiverId: payment.receiverId
-        }
-      );
-
-      return res.sendStatus(200);
-    }
-
-    let accessToken = sellerAccount.mpAccessToken;
-
-    const expiresAt = sellerAccount.mpTokenExpiresAt
-      ? new Date(sellerAccount.mpTokenExpiresAt).getTime()
-      : 0;
-
-    if (expiresAt > 0 && expiresAt <= Date.now() + 5 * 60 * 1000) {
-      const refreshed = await refreshSellerToken(sellerAccount);
-
-      accessToken = refreshed.mpAccessToken;
-    }
-
-    const mpClient = createMercadoPagoClient(accessToken);
-    const paymentApi = new Payment(mpClient);
-
-    const mpPayment = await paymentApi.get({
-      id: mpId
-    });
-
-    if (Number(mpPayment.external_reference) !== Number(payment.id)) {
-      console.error('Referência externa divergente no webhook:', {
-        mpPaymentId: mpId,
-        externalReference: mpPayment.external_reference,
-        internalPaymentId: payment.id
-      });
-
-      return res.sendStatus(200);
-    }
-
-    console.log('Pagamento Mercado Pago:', {
-      paymentId: mpId,
-      internalPaymentId: payment.id,
-      projectId: payment.projectId,
-      milestoneId: payment.milestoneId,
-      status: mpPayment.status
-    });
-
-    if (mpPayment.status === 'approved') {
-      if (payment.status !== 'paid') {
-        const updatedPayment = await prisma.payment.update({
-          where: {
-            id: payment.id
-          },
-          data: {
-            status: 'paid',
-            mpPaymentId: String(mpId),
-            paymentMethod: mpPayment.payment_type_id || null,
-            paidAt: new Date()
-          }
-        });
-
-        const project = await prisma.project.findUnique({
-          where: {
-            id: payment.projectId
-          },
-          select: {
-            id: true,
-            title: true,
-            clientId: true,
-            proposals: {
-              where: {
-                status: 'accepted'
-              },
-              select: {
-                freelancerId: true
-              }
-            }
-          }
-        });
-
-        if (project) {
-          const acceptedProposal = project.proposals[0];
-
-          const notifications = [
-            {
-              userId: Number(project.clientId),
-              type: 'payment_confirmed',
-              message: `O pagamento do marco ${payment.milestoneId} do projeto "${project.title}" foi confirmado.`
-            }
-          ];
-
-          if (acceptedProposal) {
-            notifications.push({
-              userId: Number(acceptedProposal.freelancerId),
-              type: 'payment_confirmed',
-              message: `O pagamento do marco ${payment.milestoneId} do projeto "${project.title}" foi confirmado pelo cliente.`
-            });
-          }
-
-          await prisma.notification.createMany({
-            data: notifications
-          });
-        }
-
-        console.log('Pagamento atualizado para pago:', {
-          paymentId: updatedPayment.id,
-          milestoneId: updatedPayment.milestoneId
-        });
-      }
-    } else if (
-      mpPayment.status === 'rejected' ||
-      mpPayment.status === 'cancelled'
-    ) {
-      if (payment.status === 'pending') {
-        await prisma.payment.update({
-          where: {
-            id: payment.id
-          },
-          data: {
-            status: mpPayment.status === 'rejected' ? 'rejected' : 'cancelled',
-            mpPaymentId: String(mpId),
-            paymentMethod: mpPayment.payment_type_id || null
-          }
-        });
-      }
+    if (payment) {
+      await syncPixPayment(payment);
     }
 
     return res.sendStatus(200);
@@ -727,7 +931,7 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
       });
     }
 
-    const payments = await prisma.payment.findMany({
+    const rawPayments = await prisma.payment.findMany({
       where: {
         projectId
       },
@@ -735,6 +939,8 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
         createdAt: 'asc'
       }
     });
+
+    const payments = rawPayments.map(stripPixData);
 
     const paymentsByMilestone = new Map();
 
@@ -805,301 +1011,6 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
     });
   } catch (error) {
     next(error);
-  }
-});
-
-router.post('/oauth/conectar', authMiddleware, async (req, res) => {
-  try {
-    const userId = Number(req.userId);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({
-        message: 'Usuário não autenticado.'
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId
-      },
-      select: {
-        id: true,
-        role: true
-      }
-    });
-
-    if (!user || user.role !== 'freelancer') {
-      return res.status(403).json({
-        message: 'Somente freelancers podem conectar uma conta Mercado Pago.'
-      });
-    }
-
-    const { clientId } = getOAuthConfig();
-
-    const verifier = crypto.randomBytes(64).toString('base64url');
-
-    const challenge = crypto
-      .createHash('sha256')
-      .update(verifier)
-      .digest('base64url');
-
-    const state = crypto.randomBytes(32).toString('hex');
-
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-
-    await prisma.$executeRaw`
-      INSERT INTO public.mercadopago_oauth_states
-        (state, user_id, verifier, expires_at)
-      VALUES
-        (${state}, ${userId}, ${verifier}, ${expiresAt})
-    `;
-
-    const authorizationUrl = new URL(
-      'https://auth.mercadopago.com.br/authorization'
-    );
-
-    authorizationUrl.searchParams.set('client_id', clientId);
-    authorizationUrl.searchParams.set('response_type', 'code');
-    authorizationUrl.searchParams.set('platform_id', 'mp');
-    authorizationUrl.searchParams.set('state', state);
-    authorizationUrl.searchParams.set('redirect_uri', MP_REDIRECT_URI);
-    authorizationUrl.searchParams.set('code_challenge', challenge);
-    authorizationUrl.searchParams.set('code_challenge_method', 'S256');
-
-    return res.json({
-      url: authorizationUrl.toString()
-    });
-  } catch (error) {
-    console.error('Erro ao iniciar OAuth Mercado Pago:', error);
-
-    return res.status(500).json({
-      message: 'Não foi possível iniciar a conexão com o Mercado Pago.'
-    });
-  }
-});
-
-router.get('/oauth/status', authMiddleware, async (req, res) => {
-  try {
-    const userId = Number(req.userId);
-
-    if (!Number.isInteger(userId) || userId <= 0) {
-      return res.status(401).json({
-        message: 'Usuário não autenticado.'
-      });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId
-      },
-      select: {
-        id: true,
-        role: true
-      }
-    });
-
-    if (!user || user.role !== 'freelancer') {
-      return res.status(403).json({
-        message:
-          'Somente freelancers podem consultar a conexão Mercado Pago.'
-      });
-    }
-
-    const account = await prisma.mercadoPagoAccount.findUnique({
-      where: {
-        userId
-      },
-      select: {
-        mpUserId: true,
-        mpConnectedAt: true
-      }
-    });
-
-    return res.json({
-      connected: Boolean(account?.mpUserId && account?.mpConnectedAt),
-      connectedAt: account?.mpConnectedAt || null
-    });
-  } catch (error) {
-    console.error('Erro ao consultar status Mercado Pago:', error);
-
-    return res.status(500).json({
-      message: 'Não foi possível consultar a conexão com o Mercado Pago.'
-    });
-  }
-});
-
-router.get('/oauth/callback', async (req, res) => {
-  try {
-    const {
-      code,
-      state,
-      error: oauthError,
-      error_description: oauthErrorDescription
-    } = req.query;
-
-    if (oauthError) {
-      console.error('Mercado Pago recusou OAuth:', {
-        error: oauthError,
-        description: oauthErrorDescription
-      });
-
-      return res.redirect(
-        `${process.env.FRONTEND_URL}/dashboard?mercadopago=recusado`
-      );
-    }
-
-    if (
-      typeof code !== 'string' ||
-      typeof state !== 'string' ||
-      !code ||
-      !state
-    ) {
-      return res
-        .status(400)
-        .send('Retorno OAuth inválido: código ou state ausente.');
-    }
-
-    const rows = await prisma.$queryRaw`
-      SELECT
-        state,
-        user_id,
-        verifier,
-        expires_at
-      FROM public.mercadopago_oauth_states
-      WHERE state = ${state}
-      LIMIT 1
-    `;
-
-    const oauthAttempt = rows[0];
-
-    if (!oauthAttempt) {
-      return res
-        .status(400)
-        .send(
-          'Tentativa OAuth inválida ou já utilizada. Inicie a conexão novamente.'
-        );
-    }
-
-    await prisma.$executeRaw`
-      DELETE FROM public.mercadopago_oauth_states
-      WHERE state = ${state}
-    `;
-
-    if (new Date(oauthAttempt.expires_at).getTime() < Date.now()) {
-      return res
-        .status(400)
-        .send('A tentativa de conexão expirou. Inicie novamente pelo LancerDev.');
-    }
-
-    const userId = Number(oauthAttempt.user_id);
-
-    const user = await prisma.user.findUnique({
-      where: {
-        id: userId
-      },
-      select: {
-        id: true,
-        role: true
-      }
-    });
-
-    if (!user || user.role !== 'freelancer') {
-      return res
-        .status(403)
-        .send(
-          'A conta do LancerDev não possui permissão para conectar Mercado Pago.'
-        );
-    }
-
-    const { clientId, clientSecret } = getOAuthConfig();
-
-    const tokenBody = {
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: MP_REDIRECT_URI,
-      code_verifier: oauthAttempt.verifier
-    };
-
-    if (process.env.MP_TEST_TOKEN !== 'false') {
-      tokenBody.test_token = true;
-    }
-
-    const tokenResponse = await fetch('https://api.mercadopago.com/oauth/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(tokenBody)
-    });
-
-    const tokenData = await tokenResponse.json();
-
-    if (!tokenResponse.ok) {
-      console.error('Erro na troca OAuth:', {
-        status: tokenResponse.status,
-        error: tokenData.error,
-        message: tokenData.message,
-        cause: tokenData.cause
-      });
-
-      return res
-        .status(400)
-        .send(
-          `O Mercado Pago não autorizou a conexão. ${
-            tokenData.message ||
-            'Verifique as configurações da aplicação e da conta de teste.'
-          }`
-        );
-    }
-
-    if (
-      !tokenData.access_token ||
-      !tokenData.refresh_token ||
-      !tokenData.user_id
-    ) {
-      console.error('Resposta OAuth incompleta:', tokenData);
-
-      return res
-        .status(502)
-        .send('O Mercado Pago retornou uma resposta incompleta.');
-    }
-
-    const expiresAt = new Date(
-      Date.now() + Number(tokenData.expires_in || 0) * 1000
-    );
-
-    await prisma.mercadoPagoAccount.upsert({
-      where: {
-        userId
-      },
-      create: {
-        userId,
-        mpUserId: String(tokenData.user_id),
-        mpAccessToken: tokenData.access_token,
-        mpRefreshToken: tokenData.refresh_token,
-        mpTokenExpiresAt: expiresAt,
-        mpConnectedAt: new Date()
-      },
-      update: {
-        mpUserId: String(tokenData.user_id),
-        mpAccessToken: tokenData.access_token,
-        mpRefreshToken: tokenData.refresh_token,
-        mpTokenExpiresAt: expiresAt,
-        mpConnectedAt: new Date()
-      }
-    });
-
-    return res.redirect(
-      `${process.env.FRONTEND_URL}/dashboard?mercadopago=conectado`
-    );
-  } catch (error) {
-    console.error('Erro no callback OAuth Mercado Pago:', error);
-
-    return res
-      .status(500)
-      .send('Erro interno ao concluir a conexão com o Mercado Pago.');
   }
 });
 

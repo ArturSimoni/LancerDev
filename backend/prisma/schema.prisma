@@ -8,29 +8,31 @@ datasource db {
 }
 
 model User {
-  id                  Int                 @id @default(autoincrement())
-  name                String
-  email               String              @unique
-  password            String
-  role                String
-  createdAt           DateTime            @default(now()) @map("created_at")
-  projects            Project[]           @relation("ClientProjects")
-  proposals           Proposal[]
-  githubProjects      GithubProject[]
-  experiences         Experience[]
-  paymentsSent        Payment[]           @relation("PayerPayments")
-  paymentsReceived    Payment[]           @relation("ReceiverPayments")
-  reviewsGiven        Review[]            @relation("Reviewer")
-  reviewsReceived     Review[]            @relation("Reviewee")
-  clientChats         Chat[]              @relation("ClientChats")
-  freelancerChats     Chat[]              @relation("FreelancerChats")
-  roomMessages        ChatRoomMessage[]   @relation("RoomMessagesSent")
-  clientProfile       ClientProfile?
-  freelancerProfile   FreelancerProfile?
-  mercadoPagoAccount  MercadoPagoAccount?
-  notifications       Notification[]
-  resetPasswordToken  String?             @map("reset_password_token")
-  resetPasswordExpires DateTime?          @map("reset_password_expires")
+  id                   Int                 @id @default(autoincrement())
+  name                 String
+  email                String              @unique
+  password             String
+  role                 String
+  pixKey               String?             @map("pix_key")
+  pixKeyType           String?             @map("pix_key_type")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  projects             Project[]           @relation("ClientProjects")
+  proposals            Proposal[]
+  githubProjects       GithubProject[]
+  experiences          Experience[]
+  paymentsSent         Payment[]           @relation("PayerPayments")
+  paymentsReceived     Payment[]           @relation("ReceiverPayments")
+  reviewsGiven         Review[]            @relation("Reviewer")
+  reviewsReceived      Review[]            @relation("Reviewee")
+  clientChats          Chat[]              @relation("ClientChats")
+  freelancerChats      Chat[]              @relation("FreelancerChats")
+  roomMessages         ChatRoomMessage[]   @relation("RoomMessagesSent")
+  clientProfile        ClientProfile?
+  freelancerProfile    FreelancerProfile?
+  mercadoPagoAccount   MercadoPagoAccount?
+  notifications        Notification[]
+  resetPasswordToken   String?             @map("reset_password_token")
+  resetPasswordExpires DateTime?           @map("reset_password_expires")
 
   @@map("users")
 }
@@ -46,26 +48,26 @@ model ClientProfile {
 }
 
 model FreelancerProfile {
-  userId      Int       @id @map("user_id")
-  bio         String?
-  hourlyRate  Decimal?  @map("hourly_rate")
-  resumeUrl   String?   @map("resume_url")
-  websiteUrl  String?   @map("website_url")
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     Int      @id @map("user_id")
+  bio        String?
+  hourlyRate Decimal? @map("hourly_rate")
+  resumeUrl  String?  @map("resume_url")
+  websiteUrl String?  @map("website_url")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("freelancer_profiles")
 }
 
 model MercadoPagoAccount {
-  userId            Int       @id @map("user_id")
-  mpUserId          String?   @unique @map("mp_user_id")
-  mpAccessToken     String?   @map("mp_access_token")
-  mpRefreshToken    String?   @map("mp_refresh_token")
-  mpTokenExpiresAt  DateTime? @map("mp_token_expires_at")
-  mpConnectedAt     DateTime? @map("mp_connected_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           Int       @id @map("user_id")
+  mpUserId         String?   @unique @map("mp_user_id")
+  mpAccessToken    String?   @map("mp_access_token")
+  mpRefreshToken   String?   @map("mp_refresh_token")
+  mpTokenExpiresAt DateTime? @map("mp_token_expires_at")
+  mpConnectedAt    DateTime? @map("mp_connected_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("mercadopago_accounts")
 }
@@ -141,8 +143,15 @@ model Payment {
   status          String     @default("pending")
   mpPreferenceId  String?    @map("mp_preference_id")
   mpPaymentId     String?    @map("mp_payment_id")
+  mpOrderId       String?    @map("mp_order_id")
+  pixQrCode       String?    @map("pix_qr_code")
+  pixQrCodeBase64 String?    @map("pix_qr_code_base64")
+  pixTicketUrl    String?    @map("pix_ticket_url")
   paymentMethod   String?    @map("payment_method")
   paidAt          DateTime?  @map("paid_at")
+  payoutStatus    String?    @map("payout_status")
+  payoutAt        DateTime?  @map("payout_at")
+  payoutPixKey    String?    @map("payout_pix_key")
   createdAt       DateTime   @default(now()) @map("created_at")
   project         Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   milestone       Milestone? @relation(fields: [milestoneId], references: [id], onDelete: SetNull)

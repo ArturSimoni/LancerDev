@@ -1,14 +1,12 @@
 const express = require('express');
-
 const router = express.Router();
-
 const prisma = require('../config/database');
-
 const authMiddleware = require('../middlewares/auth');
 
 router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
   try {
     const projectId = Number(req.params.projectId);
+    const userId = Number(req.userId);
 
     if (!Number.isInteger(projectId) || projectId <= 0) {
       return res.status(400).json({
@@ -35,10 +33,10 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
       });
     }
 
-    const isClient = Number(project.clientId) === Number(req.userId);
+    const isClient = Number(project.clientId) === userId;
 
     const isFreelancer = project.proposals.some(
-      proposal => Number(proposal.freelancerId) === Number(req.userId)
+      proposal => Number(proposal.freelancerId) === userId
     );
 
     if (!isClient && !isFreelancer) {
@@ -65,6 +63,7 @@ router.get('/projeto/:projectId', authMiddleware, async (req, res, next) => {
 router.patch('/:id/status', authMiddleware, async (req, res, next) => {
   try {
     const milestoneId = Number(req.params.id);
+    const userId = Number(req.userId);
     const { status } = req.body;
 
     const validStatuses = [
@@ -109,13 +108,15 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
       });
     }
 
-    if (milestone.project.status === 'completed') {
+    const project = milestone.project;
+
+    if (project.status === 'completed') {
       return res.status(400).json({
         message: 'Este projeto já foi concluído.'
       });
     }
 
-    const acceptedProposal = milestone.project.proposals[0];
+    const acceptedProposal = project.proposals[0];
 
     if (!acceptedProposal) {
       return res.status(400).json({
@@ -123,11 +124,10 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
       });
     }
 
-    const isClient =
-      Number(milestone.project.clientId) === Number(req.userId);
+    const isClient = Number(project.clientId) === userId;
 
     const isFreelancer =
-      Number(acceptedProposal.freelancerId) === Number(req.userId);
+      Number(acceptedProposal.freelancerId) === userId;
 
     if (!isClient && !isFreelancer) {
       return res.status(403).json({
@@ -136,36 +136,25 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
     }
 
     if (isFreelancer) {
-      if (
-        status === 'in_progress' &&
-        milestone.status !== 'pending'
-      ) {
+      if (status === 'in_progress' && milestone.status !== 'pending') {
         return res.status(400).json({
           message: 'Apenas uma etapa em A Fazer pode ser iniciada.'
         });
       }
 
-      if (
-        status === 'pending' &&
-        milestone.status !== 'in_progress'
-      ) {
+      if (status === 'pending' && milestone.status !== 'in_progress') {
         return res.status(400).json({
           message: 'Apenas uma etapa em desenvolvimento pode voltar para A Fazer.'
         });
       }
 
-      if (
-        status === 'in_review' &&
-        milestone.status !== 'in_progress'
-      ) {
+      if (status === 'in_review' && milestone.status !== 'in_progress') {
         return res.status(400).json({
           message: 'Apenas uma etapa em desenvolvimento pode ser enviada para revisão.'
         });
       }
 
-      if (
-        status === 'approved'
-      ) {
+      if (status === 'approved') {
         return res.status(403).json({
           message: 'Somente o cliente pode aprovar uma etapa.'
         });
@@ -173,10 +162,7 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
     }
 
     if (isClient) {
-      if (
-        status !== 'approved' &&
-        status !== 'in_progress'
-      ) {
+      if (status !== 'approved' && status !== 'in_progress') {
         return res.status(403).json({
           message: 'O cliente só pode aprovar a etapa ou solicitar correção.'
         });
@@ -189,23 +175,88 @@ router.patch('/:id/status', authMiddleware, async (req, res, next) => {
       }
     }
 
-    const updatedMilestone = await prisma.milestone.update({
-      where: {
-        id: milestoneId
-      },
-      data: {
-        status
+    const result = await prisma.$transaction(async tx => {
+      const updatedMilestone = await tx.milestone.update({
+        where: {
+          id: milestoneId
+        },
+        data: {
+          status
+        }
+      });
+
+      const allMilestones = await tx.milestone.findMany({
+        where: {
+          projectId: project.id
+        },
+        select: {
+          id: true,
+          status: true
+        }
+      });
+
+      const projectCompleted =
+        allMilestones.length > 0 &&
+        allMilestones.every(item => item.status === 'approved');
+
+      let updatedProject = null;
+
+      if (projectCompleted) {
+        updatedProject = await tx.project.update({
+          where: {
+            id: project.id
+          },
+          data: {
+            status: 'completed'
+          }
+        });
+      } else if (project.status === 'open') {
+        updatedProject = await tx.project.update({
+          where: {
+            id: project.id
+          },
+          data: {
+            status: 'in_progress'
+          }
+        });
       }
+
+      return {
+        updatedMilestone,
+        projectCompleted,
+        projectStatus: updatedProject?.status || project.status
+      };
     });
 
+    if (result.projectCompleted) {
+      const reviewNotifications = [
+        {
+          userId: Number(project.clientId),
+          type: 'review_pending',
+          message: `O projeto "${project.title}" foi concluído. Avalie o freelancer contratado.`
+        },
+        {
+          userId: Number(acceptedProposal.freelancerId),
+          type: 'review_pending',
+          message: `O projeto "${project.title}" foi concluído. Avalie o cliente.`
+        }
+      ];
+
+      await prisma.notification.createMany({
+        data: reviewNotifications
+      });
+    }
+
     return res.json({
-      ...updatedMilestone,
-      projectCompleted: false,
-      message:
-        status === 'in_review'
+      ...result.updatedMilestone,
+      projectCompleted: result.projectCompleted,
+      projectStatus: result.projectStatus,
+      message: result.projectCompleted
+        ? 'Projeto concluído! As avaliações já estão disponíveis para o cliente e o freelancer.'
+        : status === 'in_review'
           ? 'Marco enviado para revisão.'
           : status === 'approved'
-            ? 'Marco aprovado. O pagamento está disponível.'
+            ? 'Marco aprovado.'
             : status === 'in_progress'
               ? 'Marco iniciado.'
               : 'Marco atualizado com sucesso.'

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import KanbanBoard from '../components/KanbanBoard';
+import PixPaymentModal from '../components/PixPaymentModal';
 
 function isMilestoneCompleted(status) {
   return [
@@ -20,6 +21,22 @@ function isMilestoneCompleted(status) {
     String(status || '').trim().toLowerCase()
   );
 }
+
+const PIX_TYPE_LABELS = {
+  cpf: 'CPF',
+  cnpj: 'CNPJ',
+  email: 'E-mail',
+  phone: 'Telefone',
+  random: 'Chave aleatória'
+};
+
+const PIX_PLACEHOLDERS = {
+  cpf: '000.000.000-00',
+  cnpj: '00.000.000/0000-00',
+  email: 'voce@email.com',
+  phone: '(41) 90000-0000',
+  random: '00000000-0000-0000-0000-000000000000'
+};
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -63,14 +80,29 @@ export default function Dashboard() {
   const [reviewLoading, setReviewLoading] =
     useState(false);
 
-  const [mpConnected, setMpConnected] =
+  const [pixRegistered, setPixRegistered] =
     useState(false);
 
-  const [mpConnecting, setMpConnecting] =
+  const [pixKeyType, setPixKeyType] =
+    useState('cpf');
+
+  const [pixKeyMasked, setPixKeyMasked] =
+    useState('');
+
+  const [pixKeyInput, setPixKeyInput] =
+    useState('');
+
+  const [pixEditing, setPixEditing] =
     useState(false);
 
-  const [paymentLoading, setPaymentLoading] =
+  const [pixSaving, setPixSaving] =
     useState(false);
+
+  const [pixTarget, setPixTarget] =
+    useState(null);
+
+  const [refreshKey, setRefreshKey] =
+    useState(0);
 
   useEffect(() => {
     if (!role) {
@@ -118,14 +150,22 @@ export default function Dashboard() {
         try {
           const response =
             await api.get(
-              '/payments/oauth/status'
+              '/payments/pix-key'
             );
 
-          setMpConnected(
-            Boolean(response.data.connected)
+          setPixRegistered(
+            Boolean(response.data.registered)
+          );
+
+          setPixKeyType(
+            response.data.pixKeyType || 'cpf'
+          );
+
+          setPixKeyMasked(
+            response.data.pixKeyMasked || ''
           );
         } catch {
-          setMpConnected(false);
+          setPixRegistered(false);
         }
       }
 
@@ -293,14 +333,10 @@ export default function Dashboard() {
     setPaymentStatus(status);
   }
 
-  async function handlePayMilestone(
+  function handlePayMilestone(
     projectId,
     milestoneId
   ) {
-    if (paymentLoading) {
-      return;
-    }
-
     const projectData =
       paymentStatus[projectId];
 
@@ -344,79 +380,119 @@ export default function Dashboard() {
       return;
     }
 
-    setPaymentLoading(true);
+    setPixTarget({
+      projectId: Number(projectId),
+      milestoneId: Number(milestoneId)
+    });
+  }
+
+  async function handleSavePixKey(event) {
+    event.preventDefault();
+
+    if (!pixKeyInput.trim()) {
+      alert('Informe a chave Pix.');
+      return;
+    }
 
     try {
+      setPixSaving(true);
+
       const response =
-        await api.post(
-          '/payments/criar',
+        await api.put(
+          '/payments/pix-key',
           {
-            projectId:
-              Number(projectId),
-            milestoneId:
-              Number(milestoneId)
+            pixKeyType,
+            pixKey: pixKeyInput.trim()
           }
         );
 
-      const checkoutUrl =
-        response.data?.sandboxInitPoint ||
-        response.data?.initPoint;
+      setPixRegistered(true);
 
-      if (!checkoutUrl) {
-        throw new Error(
-          'O Mercado Pago não retornou o endereço de pagamento.'
-        );
-      }
-
-      window.location.href =
-        checkoutUrl;
-    } catch (error) {
-      console.error(
-        'Erro ao iniciar pagamento:',
-        error
+      setPixKeyType(
+        response.data.pixKeyType || pixKeyType
       );
 
+      setPixKeyMasked(
+        response.data.pixKeyMasked || ''
+      );
+
+      setPixKeyInput('');
+      setPixEditing(false);
+    } catch (error) {
       alert(
         error.response?.data?.message ||
-        error.message ||
-        'Não foi possível iniciar o pagamento.'
+        'Não foi possível salvar a chave Pix.'
       );
-
-      setPaymentLoading(false);
+    } finally {
+      setPixSaving(false);
     }
   }
 
-  async function handleConnectMercadoPago() {
+  async function refreshLists() {
     try {
-      setMpConnecting(true);
+      const [
+        activeResponse,
+        historyResponse,
+        pendingResponse
+      ] = await Promise.all([
+        api.get('/projects/ativos'),
+        api.get('/projects/historico'),
+        api.get('/reviews/pendentes')
+      ]);
 
-      const response =
-        await api.post(
-          '/payments/oauth/conectar'
-        );
+      const active =
+        Array.isArray(activeResponse.data)
+          ? activeResponse.data
+          : [];
 
-      if (!response.data?.url) {
-        throw new Error(
-          'O servidor não retornou a URL de autorização.'
-        );
-      }
+      setActiveProjects(active);
 
-      window.location.href =
-        response.data.url;
+      setHistoryProjects(
+        Array.isArray(historyResponse.data)
+          ? historyResponse.data
+          : []
+      );
+
+      setPendingReviews(
+        Array.isArray(pendingResponse.data)
+          ? pendingResponse.data
+          : []
+      );
+
+      setSelectedProject(current => {
+        if (
+          current &&
+          active.some(
+            project =>
+              Number(project.id) ===
+              Number(current.id)
+          )
+        ) {
+          return active.find(
+            project =>
+              Number(project.id) ===
+              Number(current.id)
+          );
+        }
+
+        return active[0] || null;
+      });
+
+      await checkProjectPayments(active);
     } catch (error) {
       console.error(
-        'Erro ao conectar Mercado Pago:',
+        'Erro ao atualizar o painel:',
         error
       );
-
-      alert(
-        error.response?.data?.message ||
-        error.message ||
-        'Não foi possível iniciar a conexão com o Mercado Pago.'
-      );
-
-      setMpConnecting(false);
     }
+  }
+
+  async function handlePixClosed() {
+    setPixTarget(null);
+
+    await refreshLists();
+
+    setRefreshKey(current => current + 1);
   }
 
   function handleSelectProject(project) {
@@ -632,61 +708,127 @@ export default function Dashboard() {
           <div style={styles.mpInfo}>
             <div>
               <h2 style={styles.mpTitle}>
-                Conta Mercado Pago
+                Recebimento via Pix
               </h2>
 
               <p style={styles.mpDescription}>
-                Conecte sua conta Mercado Pago
-                para receber os pagamentos dos
-                seus marcos.
+                Cadastre a chave Pix que receberá
+                os repasses dos seus marcos.
               </p>
             </div>
 
             <span
               style={{
                 ...styles.mpBadge,
-                color: mpConnected
+                color: pixRegistered
                   ? '#00c851'
                   : '#ff6b00',
                 backgroundColor:
-                  mpConnected
+                  pixRegistered
                     ? '#00c85115'
                     : '#ff6b0015',
                 borderColor:
-                  mpConnected
+                  pixRegistered
                     ? '#00c85140'
                     : '#ff6b0040'
               }}
             >
-              {mpConnected
-                ? 'Conta conectada'
-                : 'Não conectada'}
+              {pixRegistered
+                ? 'Chave cadastrada'
+                : 'Não cadastrada'}
             </span>
           </div>
 
-          {mpConnected ? (
-            <p style={styles.mpSuccess}>
-              Sua conta Mercado Pago está
-              vinculada ao LancerDev. Os
-              pagamentos aprovados serão
-              direcionados para essa conta.
-            </p>
+          {pixRegistered && !pixEditing ? (
+            <div style={styles.pixSaved}>
+              <p
+                style={{
+                  ...styles.mpSuccess,
+                  margin: 0
+                }}
+              >
+                {PIX_TYPE_LABELS[pixKeyType] ||
+                  'Chave'}
+                : <strong>{pixKeyMasked}</strong>
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setPixEditing(true)
+                }
+                style={styles.pixEditBtn}
+              >
+                Alterar chave
+              </button>
+            </div>
           ) : (
-            <button
-              onClick={
-                handleConnectMercadoPago
-              }
-              disabled={mpConnecting}
-              style={{
-                ...styles.mpButton,
-                opacity:
-                  mpConnecting ? 0.6 : 1
-              }}
+            <form
+              onSubmit={handleSavePixKey}
+              style={styles.pixForm}
             >
-              {mpConnecting
-                ? 'Conectando...'
-                : 'Conectar Mercado Pago'}
-            </button>
+              <select
+                value={pixKeyType}
+                onChange={event =>
+                  setPixKeyType(
+                    event.target.value
+                  )
+                }
+                style={styles.pixSelect}
+              >
+                {Object.entries(
+                  PIX_TYPE_LABELS
+                ).map(([value, label]) => (
+                  <option
+                    key={value}
+                    value={value}
+                  >
+                    {label}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                type="text"
+                value={pixKeyInput}
+                onChange={event =>
+                  setPixKeyInput(
+                    event.target.value
+                  )
+                }
+                placeholder={
+                  PIX_PLACEHOLDERS[pixKeyType]
+                }
+                autoComplete="off"
+                style={styles.pixInput}
+              />
+
+              <button
+                type="submit"
+                disabled={pixSaving}
+                style={{
+                  ...styles.pixSaveBtn,
+                  opacity: pixSaving ? 0.6 : 1
+                }}
+              >
+                {pixSaving
+                  ? 'Salvando...'
+                  : 'Salvar chave Pix'}
+              </button>
+
+              {pixRegistered && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPixEditing(false);
+                    setPixKeyInput('');
+                  }}
+                  style={styles.pixEditBtn}
+                >
+                  Cancelar
+                </button>
+              )}
+            </form>
           )}
         </div>
       )}
@@ -828,6 +970,7 @@ export default function Dashboard() {
                     </div>
 
                     <KanbanBoard
+                      key={`${selectedProject.id}-${refreshKey}`}
                       projectId={
                         selectedProject.id
                       }
@@ -949,8 +1092,25 @@ export default function Dashboard() {
                           O pagamento deste
                           marco já foi iniciado.
                           Aguarde a confirmação
-                          do Mercado Pago.
+                          do pagamento Pix.
                         </p>
+
+                        {role === 'client' && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handlePayMilestone(
+                                selectedProject.id,
+                                selectedCurrentMilestone.id
+                              )
+                            }
+                            style={
+                              styles.payMilestoneButton
+                            }
+                          >
+                            Ver QR Code Pix
+                          </button>
+                        )}
                       </div>
                     ) : canPaySelectedMilestone ? (
                       <div>
@@ -966,26 +1126,17 @@ export default function Dashboard() {
 
                         <button
                           type="button"
-                          disabled={
-                            paymentLoading
-                          }
                           onClick={() =>
                             handlePayMilestone(
                               selectedProject.id,
                               selectedCurrentMilestone.id
                             )
                           }
-                          style={{
-                            ...styles.payMilestoneButton,
-                            opacity:
-                              paymentLoading
-                                ? 0.6
-                                : 1
-                          }}
+                          style={
+                            styles.payMilestoneButton
+                          }
                         >
-                          {paymentLoading
-                            ? 'Abrindo pagamento...'
-                            : 'Pagar marco com Mercado Pago'}
+                          Pagar marco com Pix
                         </button>
                       </div>
                     ) : role === 'freelancer' ? (
@@ -1089,6 +1240,7 @@ export default function Dashboard() {
                 )}
 
                 <KanbanBoard
+                  key={`${selectedProject.id}-${refreshKey}`}
                   projectId={
                     selectedProject.id
                   }
@@ -1096,9 +1248,7 @@ export default function Dashboard() {
                     role === 'freelancer'
                   }
                   onMilestoneUpdated={() =>
-                    checkProjectPayments(
-                      activeProjects
-                    )
+                    refreshLists()
                   }
                 />
               </>
@@ -1372,6 +1522,13 @@ export default function Dashboard() {
           </form>
         </div>
       )}
+      {pixTarget && (
+        <PixPaymentModal
+          projectId={pixTarget.projectId}
+          milestoneId={pixTarget.milestoneId}
+          onClose={handlePixClosed}
+        />
+      )}
     </div>
   );
 }
@@ -1502,8 +1659,54 @@ const styles = {
     fontSize: '13px'
   },
 
-  mpButton: {
-    marginTop: '18px',
+  pixSaved: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: '15px',
+    flexWrap: 'wrap',
+    margin: '16px 0 0 13px'
+  },
+
+  pixEditBtn: {
+    backgroundColor: 'transparent',
+    color: '#ccc',
+    border: '1px solid #333',
+    borderRadius: '6px',
+    padding: '9px 14px',
+    fontSize: '12px',
+    cursor: 'pointer'
+  },
+
+  pixForm: {
+    display: 'flex',
+    gap: '10px',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    marginTop: '18px'
+  },
+
+  pixSelect: {
+    backgroundColor: '#101010',
+    border: '1px solid #333',
+    borderRadius: '6px',
+    padding: '10px 12px',
+    color: '#fff',
+    fontSize: '13px'
+  },
+
+  pixInput: {
+    flex: '1 1 240px',
+    minWidth: '200px',
+    backgroundColor: '#101010',
+    border: '1px solid #333',
+    borderRadius: '6px',
+    padding: '10px 12px',
+    color: '#fff',
+    fontSize: '13px'
+  },
+
+  pixSaveBtn: {
     backgroundColor: '#ff6b00',
     color: '#fff',
     border: 'none',

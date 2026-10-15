@@ -15,6 +15,14 @@ const clientLinks = [
   { to: '/meus-anuncios', label: 'Meus anúncios' },
 ];
 
+const NOTIFICATION_META = {
+  message: { icon: '✉', color: '#33b5e5' },
+  review: { icon: '★', color: '#ffb400' },
+  payment: { icon: '$', color: '#00c851' },
+  completion: { icon: '✓', color: '#00c851' },
+  other: { icon: '•', color: '#ff8a36' },
+};
+
 function getAuthState() {
   const userData = localStorage.getItem('@LancerDev:user');
   let user = null;
@@ -32,6 +40,123 @@ function getAuthState() {
   };
 }
 
+function classifyNotification(notification) {
+  const type = String(notification.type || '').toLowerCase();
+  const message = String(notification.message || '').toLowerCase();
+
+  const isMessage =
+    type.includes('message') ||
+    type.includes('chat') ||
+    message.includes('enviou uma mensagem') ||
+    message.includes('nova mensagem');
+
+  if (isMessage) return 'message';
+
+  const isReview =
+    type.includes('review') ||
+    type.includes('rating') ||
+    type.includes('avaliacao') ||
+    type.includes('avaliação') ||
+    message.includes('nova avaliação') ||
+    message.includes('pode avaliar') ||
+    message.includes('avaliar o freelancer');
+
+  if (isReview) return 'review';
+
+  const isCompletion =
+    type.includes('complete') ||
+    type.includes('concluido') ||
+    type.includes('concluído') ||
+    message.includes('foi concluído') ||
+    message.includes('foi concluido') ||
+    message.includes('projeto concluído') ||
+    message.includes('projeto concluido');
+
+  if (isCompletion) return 'completion';
+
+  const isPayment =
+    type.includes('payment') ||
+    type.includes('pagamento') ||
+    message.includes('pagamento');
+
+  if (isPayment) return 'payment';
+
+  return 'other';
+}
+
+function BellIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.7 21a2 2 0 01-3.4 0" />
+    </svg>
+  );
+}
+
+function LogoutIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+      <path d="M16 17l5-5-5-5" />
+      <path d="M21 12H9" />
+    </svg>
+  );
+}
+
+function LogoMark() {
+  return (
+    <span style={s.logoMark} aria-hidden="true">
+      <svg
+        width="17"
+        height="17"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#111"
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M9 7l-5 5 5 5" />
+        <path d="M15 7l5 5-5 5" />
+      </svg>
+    </span>
+  );
+}
+
+function NavItem({ to, label, active }) {
+  return (
+    <Link
+      to={to}
+      className={`ld-link${active ? ' active' : ''}`}
+      style={active ? s.linkActive : s.link}
+      aria-current={active ? 'page' : undefined}
+    >
+      {label}
+      {active && <span style={s.activeBar} />}
+    </Link>
+  );
+}
+
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -42,6 +167,7 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     const token = localStorage.getItem('@LancerDev:token');
@@ -105,6 +231,45 @@ export default function Navbar() {
 
     return () => window.clearInterval(interval);
   }, [state.auth, fetchNotifications]);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+
+    onScroll();
+
+    window.addEventListener('scroll', onScroll, { passive: true });
+
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!notificationsOpen && !menuOpen) return undefined;
+
+    const onPointerDown = (event) => {
+      if (!event.target.closest('[data-ld-notif-root]')) {
+        setNotificationsOpen(false);
+      }
+
+      if (!event.target.closest('[data-ld-header]')) {
+        setMenuOpen(false);
+      }
+    };
+
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setNotificationsOpen(false);
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [notificationsOpen, menuOpen]);
 
   async function markNotificationAsRead(id) {
     const token = localStorage.getItem('@LancerDev:token');
@@ -178,59 +343,21 @@ export default function Navbar() {
       ? Number(notification.projectId)
       : null;
 
-    const type = String(notification.type || '').toLowerCase();
-    const message = String(notification.message || '').toLowerCase();
+    const kind = classifyNotification(notification);
 
-    const isMessageNotification =
-      type.includes('message') ||
-      type.includes('chat') ||
-      message.includes('enviou uma mensagem') ||
-      message.includes('nova mensagem');
-
-    const isReviewNotification =
-      type.includes('review') ||
-      type.includes('rating') ||
-      type.includes('avaliacao') ||
-      type.includes('avaliação') ||
-      message.includes('nova avaliação') ||
-      message.includes('pode avaliar') ||
-      message.includes('avaliar o freelancer');
-
-    const isPaymentOrCompletionNotification =
-      type.includes('payment') ||
-      type.includes('pagamento') ||
-      type.includes('complete') ||
-      type.includes('concluido') ||
-      type.includes('concluído') ||
-      message.includes('pagamento') ||
-      message.includes('foi concluído') ||
-      message.includes('foi concluido') ||
-      message.includes('projeto concluído') ||
-      message.includes('projeto concluido');
-
-    if (isMessageNotification) {
-      navigate(
-        projectId
-          ? `/chat?projectId=${projectId}`
-          : '/chat'
-      );
+    if (kind === 'message') {
+      navigate(projectId ? `/chat?projectId=${projectId}` : '/chat');
       return;
     }
 
-    if (isReviewNotification) {
-      navigate(
-        projectId
-          ? `/projeto/${projectId}`
-          : '/dashboard'
-      );
+    if (kind === 'review') {
+      navigate(projectId ? `/projeto/${projectId}` : '/dashboard');
       return;
     }
 
-    if (isPaymentOrCompletionNotification) {
+    if (kind === 'payment' || kind === 'completion') {
       navigate(
-        projectId
-          ? `/dashboard?projectId=${projectId}`
-          : '/dashboard'
+        projectId ? `/dashboard?projectId=${projectId}` : '/dashboard'
       );
       return;
     }
@@ -259,6 +386,12 @@ export default function Navbar() {
     navigate('/');
   }
 
+  function toggleNotifications() {
+    setNotificationsOpen((open) => !open);
+
+    if (!notificationsOpen) fetchNotifications();
+  }
+
   const links =
     state.role === 'freelancer'
       ? freelancerLinks
@@ -275,6 +408,15 @@ export default function Navbar() {
   const firstName = state.user?.name?.trim().split(' ')[0] || 'Minha conta';
   const avatarLetter = state.user?.name?.trim().charAt(0).toUpperCase() || 'U';
 
+  const roleLabel =
+    state.role === 'freelancer'
+      ? 'Freelancer'
+      : state.role === 'client'
+        ? 'Cliente'
+        : '';
+
+  const roleColor = state.role === 'freelancer' ? '#00c851' : '#33b5e5';
+
   function formatNotificationDate(date) {
     if (!date) return '';
 
@@ -290,9 +432,12 @@ export default function Navbar() {
     });
   }
 
-  function renderNotificationsPanel() {
+  function renderNotificationsPanel(inline = false) {
     return (
-      <div style={s.notificationPanel}>
+      <div
+        className="ld-panel"
+        style={inline ? { ...s.notificationPanel, ...s.notificationPanelInline } : s.notificationPanel}
+      >
         <div style={s.notificationHeader}>
           <div>
             <strong style={s.notificationTitle}>Notificações</strong>
@@ -307,6 +452,7 @@ export default function Navbar() {
             <button
               type="button"
               onClick={markAllNotificationsAsRead}
+              className="ld-text-btn"
               style={s.markAllButton}
             >
               Marcar todas como lidas
@@ -319,47 +465,63 @@ export default function Navbar() {
             <div style={s.notificationEmpty}>Carregando notificações...</div>
           ) : notifications.length === 0 ? (
             <div style={s.notificationEmpty}>
-              <span style={s.emptyBell}>🔔</span>
-              <strong>Nenhuma notificação</strong>
+              <span style={s.emptyBell}>
+                <BellIcon />
+              </span>
+              <strong style={s.emptyTitle}>Nenhuma notificação</strong>
               <span>Quando houver novidades, elas aparecerão aqui.</span>
             </div>
           ) : (
-            notifications.map((notification) => (
-              <button
-                type="button"
-                key={notification.id}
-                onClick={() => handleNotificationClick(notification)}
-                style={{
-                  ...s.notificationItem,
-                  ...(notification.read ? {} : s.notificationUnread),
-                }}
-              >
-                <span
+            notifications.map((notification) => {
+              const meta =
+                NOTIFICATION_META[classifyNotification(notification)];
+
+              return (
+                <button
+                  type="button"
+                  key={notification.id}
+                  className="ld-notif-item"
+                  onClick={() => handleNotificationClick(notification)}
                   style={{
-                    ...s.notificationDot,
-                    background: notification.read ? 'transparent' : '#ff6b00',
+                    ...s.notificationItem,
+                    ...(notification.read ? {} : s.notificationUnread),
                   }}
-                />
-
-                <span style={s.notificationContent}>
-                  <span style={s.notificationMessage}>
-                    {notification.message}
+                >
+                  <span
+                    style={{
+                      ...s.notificationIcon,
+                      color: meta.color,
+                      background: `${meta.color}1a`,
+                      borderColor: `${meta.color}40`,
+                    }}
+                  >
+                    {meta.icon}
                   </span>
-                  <span style={s.notificationDate}>
-                    {formatNotificationDate(notification.createdAt)}
-                  </span>
-                </span>
 
-                {!notification.read && (
-                  <span style={s.unreadLabel}>Nova</span>
-                )}
-              </button>
-            ))
+                  <span style={s.notificationContent}>
+                    <span
+                      style={{
+                        ...s.notificationMessage,
+                        color: notification.read ? '#a8a8a8' : '#ececec',
+                      }}
+                    >
+                      {notification.message}
+                    </span>
+                    <span style={s.notificationDate}>
+                      {formatNotificationDate(notification.createdAt)}
+                    </span>
+                  </span>
+
+                  {!notification.read && <span style={s.unreadDot} />}
+                </button>
+              );
+            })
           )}
         </div>
 
         <button
           type="button"
+          className="ld-footer-btn"
           style={s.refreshButton}
           onClick={fetchNotifications}
         >
@@ -370,47 +532,49 @@ export default function Navbar() {
   }
 
   return (
-    <header style={s.header}>
-      <div style={s.container}>
+    <header
+      data-ld-header
+      className="ld-header"
+      style={{
+        ...s.header,
+        ...(scrolled ? s.headerScrolled : {}),
+      }}
+    >
+      <div className="ld-container" style={s.container}>
         <Link to="/" style={s.logo} aria-label="LancerDev - Início">
-          Lancer<span style={s.logoAccent}>Dev</span>
-          <span style={s.logoDot} />
+          <LogoMark />
+          <span style={s.logoText}>
+            Lancer<span style={s.logoAccent}>Dev</span>
+          </span>
         </Link>
 
-        <nav style={s.nav} aria-label="Navegação principal">
-          <Link to="/" style={isActive('/') ? s.linkActive : s.link}>
-            Início
-          </Link>
+        <nav className="ld-nav" style={s.nav} aria-label="Navegação principal">
+          <NavItem to="/" label="Início" active={isActive('/')} />
 
           {state.auth &&
             links.map(({ to, label }) => (
-              <Link
-                key={to}
-                to={to}
-                style={isActive(to) ? s.linkActive : s.link}
-              >
-                {label}
-              </Link>
+              <NavItem key={to} to={to} label={label} active={isActive(to)} />
             ))}
         </nav>
 
-        <div style={s.authArea}>
+        <div className="ld-auth" style={s.authArea}>
           {state.auth ? (
             <div style={s.userMenu}>
-              <div style={s.notificationWrapper}>
+              <div data-ld-notif-root style={s.notificationWrapper}>
                 <button
                   type="button"
-                  onClick={() => {
-                    setNotificationsOpen((open) => !open);
-                    if (!notificationsOpen) fetchNotifications();
+                  onClick={toggleNotifications}
+                  className="ld-icon-btn"
+                  style={{
+                    ...s.notificationButton,
+                    ...(notificationsOpen ? s.notificationButtonOpen : {}),
                   }}
-                  style={s.notificationButton}
                   aria-label="Abrir notificações"
                   aria-expanded={notificationsOpen}
                 >
-                  <span style={s.bellIcon}>🔔</span>
+                  <BellIcon />
                   {unreadCount > 0 && (
-                    <span style={s.notificationBadge}>
+                    <span className="ld-badge" style={s.notificationBadge}>
                       {unreadCount > 99 ? '99+' : unreadCount}
                     </span>
                   )}
@@ -419,9 +583,17 @@ export default function Navbar() {
                 {notificationsOpen && renderNotificationsPanel()}
               </div>
 
-              <Link to={profilePath} style={s.profileLink}>
+              <Link to={profilePath} className="ld-profile" style={s.profileLink}>
                 <div style={s.avatar}>{avatarLetter}</div>
-                <span style={s.usernameLink}>{firstName}</span>
+
+                <span style={s.profileText}>
+                  <span style={s.usernameLink}>{firstName}</span>
+                  {roleLabel && (
+                    <span style={{ ...s.roleLabel, color: roleColor }}>
+                      {roleLabel}
+                    </span>
+                  )}
+                </span>
               </Link>
 
               <span style={s.divider} />
@@ -429,19 +601,20 @@ export default function Navbar() {
               <button
                 type="button"
                 onClick={handleLogout}
+                className="ld-logout"
                 style={s.logoutBtn}
               >
+                <LogoutIcon />
                 Sair
-                <span style={s.logoutIcon}>↗</span>
               </button>
             </div>
           ) : (
             <div style={s.authButtons}>
-              <Link to="/login" style={s.loginBtn}>
+              <Link to="/login" className="ld-login" style={s.loginBtn}>
                 Entrar
               </Link>
 
-              <Link to="/cadastro" style={s.registerBtn}>
+              <Link to="/cadastro" className="ld-register" style={s.registerBtn}>
                 Criar conta
                 <span style={s.registerArrow}>→</span>
               </Link>
@@ -451,6 +624,7 @@ export default function Navbar() {
 
         <button
           type="button"
+          className="ld-hamburger"
           style={s.hamburger}
           onClick={() => setMenuOpen((open) => !open)}
           aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
@@ -460,7 +634,7 @@ export default function Navbar() {
             style={{
               ...s.bar,
               transform: menuOpen
-                ? 'rotate(45deg) translate(4px, 4px)'
+                ? 'translateY(7px) rotate(45deg)'
                 : 'none',
             }}
           />
@@ -469,18 +643,24 @@ export default function Navbar() {
             style={{
               ...s.bar,
               transform: menuOpen
-                ? 'rotate(-45deg) translate(4px, -4px)'
+                ? 'translateY(-7px) rotate(-45deg)'
                 : 'none',
             }}
           />
+          {state.auth && unreadCount > 0 && !menuOpen && (
+            <span style={s.hamburgerDot} />
+          )}
         </button>
       </div>
 
+      <span style={s.glowLine} aria-hidden="true" />
+
       {menuOpen && (
-        <div style={s.mobileMenu}>
+        <div className="ld-mobile" style={s.mobileMenu}>
           <div style={s.mobileNavGroup}>
             <Link
               to="/"
+              className="ld-mobile-link"
               style={isActive('/') ? s.mobileLinkActive : s.mobileLink}
             >
               <span>Início</span>
@@ -492,6 +672,7 @@ export default function Navbar() {
                 <Link
                   key={to}
                   to={to}
+                  className="ld-mobile-link"
                   style={isActive(to) ? s.mobileLinkActive : s.mobileLink}
                 >
                   <span>{label}</span>
@@ -504,38 +685,49 @@ export default function Navbar() {
 
           {state.auth ? (
             <>
-              <button
-                type="button"
-                style={s.mobileNotificationButton}
-                onClick={() => {
-                  setNotificationsOpen((open) => !open);
-                  if (!notificationsOpen) fetchNotifications();
-                }}
-              >
-                <span>🔔 Notificações</span>
-                {unreadCount > 0 && (
-                  <span style={s.mobileNotificationBadge}>{unreadCount}</span>
-                )}
-              </button>
+              <div data-ld-notif-root>
+                <button
+                  type="button"
+                  className="ld-mobile-link"
+                  style={s.mobileNotificationButton}
+                  onClick={toggleNotifications}
+                >
+                  <span style={s.mobileNotificationLabel}>
+                    <BellIcon />
+                    Notificações
+                  </span>
 
-              {notificationsOpen && renderNotificationsPanel()}
+                  {unreadCount > 0 && (
+                    <span style={s.mobileNotificationBadge}>{unreadCount}</span>
+                  )}
+                </button>
 
-              <Link to={profilePath} style={s.mobileProfile}>
+                {notificationsOpen && renderNotificationsPanel(true)}
+              </div>
+
+              <Link to={profilePath} className="ld-mobile-link" style={s.mobileProfile}>
                 <div style={s.avatar}>{avatarLetter}</div>
+
                 <div style={s.mobileProfileInfo}>
                   <strong>{firstName}</strong>
-                  <span>Meu perfil</span>
+                  <span style={{ color: roleColor, fontSize: '11px' }}>
+                    {roleLabel || 'Meu perfil'}
+                  </span>
                 </div>
+
                 <span style={s.mobileProfileArrow}>→</span>
               </Link>
 
               <button
                 type="button"
                 onClick={handleLogout}
+                className="ld-mobile-logout"
                 style={s.mobileLogout}
               >
-                <span>Sair da conta</span>
-                <span>↗</span>
+                <span style={s.mobileNotificationLabel}>
+                  <LogoutIcon />
+                  Sair da conta
+                </span>
               </button>
             </>
           ) : (
@@ -554,44 +746,123 @@ export default function Navbar() {
       )}
 
       <style>{`
-        .lancer-navbar-link:hover {
+        .ld-link:hover:not(.active) {
           color: #ffffff !important;
-          background: #191919 !important;
+          background: #151515 !important;
         }
 
-        .lancer-navbar-login:hover {
+        .ld-icon-btn:hover {
+          color: #ffffff !important;
+          background: #1c1c1c !important;
+          border-color: #3a3a3a !important;
+        }
+
+        .ld-profile:hover {
+          background: #171717 !important;
+          border-color: #2c2c2c !important;
+        }
+
+        .ld-logout:hover {
           color: #ff8a36 !important;
         }
 
-        .lancer-navbar-register:hover {
-          background: #e05e00 !important;
+        .ld-login:hover {
+          color: #ffffff !important;
+        }
+
+        .ld-register:hover {
+          background: #ff7d1f !important;
+          box-shadow: 0 8px 22px rgba(255, 107, 0, 0.3) !important;
           transform: translateY(-1px);
         }
 
-        .lancer-navbar-logout:hover {
-          color: #ff6b00 !important;
+        .ld-notif-item:hover {
+          background: #171717 !important;
+        }
+
+        .ld-text-btn:hover {
+          color: #ffb070 !important;
+        }
+
+        .ld-footer-btn:hover {
+          color: #ffffff !important;
+          background: #1a1a1a !important;
+        }
+
+        .ld-mobile-link:hover {
+          background: #151515 !important;
+        }
+
+        .ld-mobile-logout:hover {
+          background: rgba(255, 107, 0, 0.1) !important;
+        }
+
+        .ld-header a:focus-visible,
+        .ld-header button:focus-visible {
+          outline: 2px solid #ff6b00;
+          outline-offset: 2px;
+        }
+
+        .ld-panel {
+          animation: ld-pop 0.16s ease-out;
+        }
+
+        .ld-badge {
+          animation: ld-pulse 2.2s infinite;
+        }
+
+        @keyframes ld-pop {
+          from {
+            opacity: 0;
+            transform: translateY(-6px) scale(0.98);
+          }
+          to {
+            opacity: 1;
+            transform: none;
+          }
+        }
+
+        @keyframes ld-pulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(255, 107, 0, 0.5);
+          }
+          70% {
+            box-shadow: 0 0 0 7px rgba(255, 107, 0, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(255, 107, 0, 0);
+          }
         }
 
         @media (max-width: 850px) {
-          .lancer-navbar-nav,
-          .lancer-navbar-auth {
+          .ld-nav,
+          .ld-auth {
             display: none !important;
           }
 
-          .lancer-navbar-hamburger {
+          .ld-hamburger {
             display: flex !important;
           }
         }
 
         @media (min-width: 851px) {
-          .lancer-navbar-mobile {
+          .ld-mobile {
             display: none !important;
           }
         }
 
         @media (max-width: 420px) {
-          .lancer-navbar-container {
+          .ld-container {
             padding: 0 16px !important;
+          }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          .ld-header *,
+          .ld-header *::before,
+          .ld-header *::after {
+            animation: none !important;
+            transition: none !important;
           }
         }
       `}</style>
@@ -605,10 +876,25 @@ const s = {
     top: 0,
     zIndex: 1000,
     width: '100%',
-    background: 'rgba(10, 10, 10, 0.96)',
-    borderBottom: '1px solid #222',
-    boxShadow: '0 8px 30px rgba(0, 0, 0, 0.18)',
-    backdropFilter: 'blur(14px)',
+    background: 'rgba(10, 10, 10, 0.82)',
+    borderBottom: '1px solid #1c1c1c',
+    backdropFilter: 'blur(16px) saturate(140%)',
+    WebkitBackdropFilter: 'blur(16px) saturate(140%)',
+    transition: 'background 0.25s, box-shadow 0.25s',
+  },
+  headerScrolled: {
+    background: 'rgba(10, 10, 10, 0.95)',
+    boxShadow: '0 10px 34px rgba(0, 0, 0, 0.35)',
+  },
+  glowLine: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '-1px',
+    height: '1px',
+    background:
+      'linear-gradient(90deg, transparent 0%, rgba(255, 107, 0, 0.45) 50%, transparent 100%)',
+    pointerEvents: 'none',
   },
   container: {
     maxWidth: '1280px',
@@ -621,52 +907,70 @@ const s = {
     gap: '28px',
   },
   logo: {
-    position: 'relative',
     display: 'inline-flex',
     alignItems: 'center',
+    gap: '10px',
     flexShrink: 0,
-    color: '#fff',
-    fontSize: '23px',
-    fontWeight: '850',
-    letterSpacing: '-1.2px',
     textDecoration: 'none',
+  },
+  logoMark: {
+    width: '32px',
+    height: '32px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '10px',
+    background: 'linear-gradient(135deg, #ff9a42, #ff6b00)',
+    boxShadow: '0 6px 18px rgba(255, 107, 0, 0.28)',
+  },
+  logoText: {
+    color: '#fff',
+    fontSize: '21px',
+    fontWeight: '800',
+    letterSpacing: '-0.9px',
   },
   logoAccent: {
     color: '#ff6b00',
-  },
-  logoDot: {
-    width: '5px',
-    height: '5px',
-    marginLeft: '3px',
-    marginTop: '17px',
-    borderRadius: '50%',
-    background: '#ff6b00',
   },
   nav: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '5px',
+    gap: '4px',
     flex: 1,
   },
   link: {
-    padding: '9px 13px',
-    borderRadius: '8px',
-    color: '#929292',
+    position: 'relative',
+    padding: '9px 14px',
+    border: '1px solid transparent',
+    borderRadius: '9px',
+    color: '#8f8f8f',
     fontSize: '13px',
     fontWeight: '550',
     textDecoration: 'none',
     transition: 'color 0.2s, background 0.2s',
   },
   linkActive: {
-    padding: '9px 13px',
-    borderRadius: '8px',
+    position: 'relative',
+    padding: '9px 14px',
+    border: '1px solid #262626',
+    borderRadius: '9px',
+    background: '#171717',
     color: '#fff',
-    background: '#1b1b1b',
-    border: '1px solid #292929',
     fontSize: '13px',
     fontWeight: '650',
     textDecoration: 'none',
+  },
+  activeBar: {
+    position: 'absolute',
+    left: '50%',
+    bottom: '-17px',
+    width: '22px',
+    height: '2px',
+    transform: 'translateX(-50%)',
+    borderRadius: '2px',
+    background: '#ff6b00',
+    boxShadow: '0 0 10px rgba(255, 107, 0, 0.7)',
   },
   authArea: {
     display: 'flex',
@@ -676,7 +980,7 @@ const s = {
   authButtons: {
     display: 'flex',
     alignItems: 'center',
-    gap: '13px',
+    gap: '12px',
   },
   loginBtn: {
     padding: '9px 12px',
@@ -691,30 +995,34 @@ const s = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '9px',
-    padding: '10px 16px',
-    borderRadius: '8px',
+    padding: '10px 17px',
+    borderRadius: '9px',
     background: '#ff6b00',
     color: '#111',
     fontSize: '13px',
     fontWeight: '750',
     textDecoration: 'none',
-    transition: 'background 0.2s, transform 0.2s',
+    transition: 'background 0.2s, transform 0.2s, box-shadow 0.2s',
   },
   registerArrow: {
-    fontSize: '17px',
+    fontSize: '16px',
     lineHeight: 1,
   },
   userMenu: {
     display: 'flex',
     alignItems: 'center',
-    gap: '14px',
+    gap: '12px',
   },
   profileLink: {
     display: 'flex',
     alignItems: 'center',
-    gap: '9px',
+    gap: '10px',
+    padding: '4px 13px 4px 4px',
+    border: '1px solid transparent',
+    borderRadius: '12px',
     color: '#ddd',
     textDecoration: 'none',
+    transition: 'background 0.2s, border-color 0.2s',
   },
   avatar: {
     width: '34px',
@@ -723,32 +1031,46 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: '11px',
-    background: 'linear-gradient(135deg, #ff8a36, #ff6b00)',
+    borderRadius: '10px',
+    background: 'linear-gradient(135deg, #ff9a42, #ff6b00)',
     color: '#111',
     fontSize: '14px',
     fontWeight: '800',
-    boxShadow: '0 4px 14px rgba(255, 107, 0, 0.18)',
+    boxShadow: '0 4px 14px rgba(255, 107, 0, 0.2)',
+  },
+  profileText: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+    minWidth: 0,
   },
   usernameLink: {
-    maxWidth: '125px',
+    maxWidth: '120px',
     overflow: 'hidden',
-    color: '#d0d0d0',
+    color: '#e6e6e6',
     fontSize: '13px',
-    fontWeight: '600',
+    fontWeight: '650',
+    lineHeight: 1.1,
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  roleLabel: {
+    fontSize: '10px',
+    fontWeight: '700',
+    letterSpacing: '0.4px',
+    textTransform: 'uppercase',
+    lineHeight: 1.1,
   },
   divider: {
     width: '1px',
     height: '22px',
-    background: '#303030',
+    background: '#2a2a2a',
   },
   logoutBtn: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '6px',
-    padding: '7px 0',
+    gap: '7px',
+    padding: '7px 2px',
     border: 'none',
     background: 'transparent',
     color: '#858585',
@@ -756,9 +1078,6 @@ const s = {
     fontWeight: '600',
     cursor: 'pointer',
     transition: 'color 0.2s',
-  },
-  logoutIcon: {
-    fontSize: '16px',
   },
   notificationWrapper: {
     position: 'relative',
@@ -770,20 +1089,22 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: '1px solid #292929',
+    border: '1px solid #262626',
     borderRadius: '10px',
-    background: '#151515',
-    color: '#ddd',
+    background: '#141414',
+    color: '#bdbdbd',
     cursor: 'pointer',
+    transition: 'background 0.2s, border-color 0.2s, color 0.2s',
   },
-  bellIcon: {
-    fontSize: '18px',
-    lineHeight: 1,
+  notificationButtonOpen: {
+    background: '#1c1c1c',
+    borderColor: '#ff6b0066',
+    color: '#ff8a36',
   },
   notificationBadge: {
     position: 'absolute',
-    top: '-5px',
-    right: '-5px',
+    top: '-6px',
+    right: '-6px',
     minWidth: '18px',
     height: '18px',
     padding: '0 4px',
@@ -799,16 +1120,23 @@ const s = {
   },
   notificationPanel: {
     position: 'absolute',
-    top: '48px',
+    top: '50px',
     right: 0,
-    width: '360px',
+    width: '380px',
     maxWidth: 'calc(100vw - 32px)',
     overflow: 'hidden',
     border: '1px solid #2a2a2a',
-    borderRadius: '12px',
-    background: '#111',
-    boxShadow: '0 16px 45px rgba(0, 0, 0, 0.45)',
+    borderRadius: '14px',
+    background: '#101010',
+    boxShadow: '0 20px 55px rgba(0, 0, 0, 0.55)',
     zIndex: 1100,
+  },
+  notificationPanelInline: {
+    position: 'static',
+    width: '100%',
+    maxWidth: '100%',
+    margin: '6px 0 10px',
+    boxShadow: 'none',
   },
   notificationHeader: {
     display: 'flex',
@@ -816,7 +1144,7 @@ const s = {
     justifyContent: 'space-between',
     gap: '12px',
     padding: '16px',
-    borderBottom: '1px solid #292929',
+    borderBottom: '1px solid #232323',
   },
   notificationTitle: {
     display: 'block',
@@ -836,80 +1164,103 @@ const s = {
     fontSize: '11px',
     fontWeight: '600',
     cursor: 'pointer',
+    transition: 'color 0.2s',
   },
   notificationList: {
     maxHeight: '340px',
     overflowY: 'auto',
   },
   notificationEmpty: {
-    minHeight: '130px',
+    minHeight: '140px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    padding: '20px',
-    color: '#888',
+    padding: '22px',
+    color: '#808080',
     fontSize: '12px',
     textAlign: 'center',
   },
   emptyBell: {
+    width: '42px',
+    height: '42px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '12px',
+    background: '#ff6b0014',
     color: '#ff8a36',
-    fontSize: '24px',
+  },
+  emptyTitle: {
+    color: '#ddd',
+    fontSize: '13px',
   },
   notificationItem: {
     width: '100%',
     display: 'flex',
     alignItems: 'flex-start',
-    gap: '10px',
-    padding: '14px 15px',
+    gap: '12px',
+    padding: '14px 16px',
     border: 'none',
-    borderBottom: '1px solid #222',
+    borderBottom: '1px solid #1d1d1d',
     background: 'transparent',
     textAlign: 'left',
     cursor: 'pointer',
+    transition: 'background 0.15s',
   },
   notificationUnread: {
-    background: 'rgba(255, 107, 0, 0.06)',
+    background: 'rgba(255, 107, 0, 0.05)',
   },
-  notificationDot: {
-    width: '7px',
-    height: '7px',
+  notificationIcon: {
+    width: '30px',
+    height: '30px',
     flexShrink: 0,
-    marginTop: '5px',
-    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    border: '1px solid',
+    borderRadius: '9px',
+    fontSize: '13px',
+    fontWeight: '800',
   },
   notificationContent: {
     display: 'flex',
     flex: 1,
     flexDirection: 'column',
-    gap: '6px',
+    gap: '5px',
+    minWidth: 0,
   },
   notificationMessage: {
-    color: '#e5e5e5',
     fontSize: '12px',
     lineHeight: 1.5,
   },
   notificationDate: {
-    color: '#777',
+    color: '#707070',
     fontSize: '10px',
   },
-  unreadLabel: {
-    color: '#ff8a36',
-    fontSize: '10px',
-    fontWeight: '700',
+  unreadDot: {
+    width: '8px',
+    height: '8px',
+    flexShrink: 0,
+    marginTop: '6px',
+    borderRadius: '50%',
+    background: '#ff6b00',
+    boxShadow: '0 0 8px rgba(255, 107, 0, 0.7)',
   },
   refreshButton: {
     width: '100%',
     padding: '12px',
     border: 'none',
-    borderTop: '1px solid #292929',
-    background: '#151515',
-    color: '#aaa',
+    borderTop: '1px solid #232323',
+    background: '#141414',
+    color: '#9a9a9a',
     fontSize: '11px',
     cursor: 'pointer',
+    transition: 'background 0.2s, color 0.2s',
   },
   hamburger: {
+    position: 'relative',
     display: 'none',
     width: '40px',
     height: '40px',
@@ -917,10 +1268,20 @@ const s = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '5px',
-    border: '1px solid #292929',
-    borderRadius: '9px',
-    background: '#151515',
+    border: '1px solid #262626',
+    borderRadius: '10px',
+    background: '#141414',
     cursor: 'pointer',
+  },
+  hamburgerDot: {
+    position: 'absolute',
+    top: '-3px',
+    right: '-3px',
+    width: '10px',
+    height: '10px',
+    border: '2px solid #0a0a0a',
+    borderRadius: '50%',
+    background: '#ff6b00',
   },
   bar: {
     width: '18px',
@@ -934,8 +1295,10 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     padding: '12px 20px 20px',
-    background: '#0d0d0d',
-    borderTop: '1px solid #222',
+    background: '#0c0c0c',
+    borderTop: '1px solid #1f1f1f',
+    maxHeight: 'calc(100vh - 70px)',
+    overflowY: 'auto',
   },
   mobileNavGroup: {
     display: 'flex',
@@ -947,18 +1310,19 @@ const s = {
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '13px 12px',
-    borderRadius: '8px',
+    borderRadius: '10px',
     color: '#aaa',
     fontSize: '14px',
     textDecoration: 'none',
+    transition: 'background 0.2s',
   },
   mobileLinkActive: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: '13px 12px',
-    borderRadius: '8px',
-    background: 'rgba(255, 107, 0, 0.08)',
+    borderRadius: '10px',
+    background: 'rgba(255, 107, 0, 0.09)',
     color: '#ff8a36',
     fontSize: '14px',
     fontWeight: '650',
@@ -969,11 +1333,12 @@ const s = {
     height: '6px',
     borderRadius: '50%',
     background: '#ff6b00',
+    boxShadow: '0 0 8px rgba(255, 107, 0, 0.7)',
   },
   mobileDivider: {
     height: '1px',
     margin: '12px 0',
-    background: '#242424',
+    background: '#222',
   },
   mobileNotificationButton: {
     display: 'flex',
@@ -982,12 +1347,18 @@ const s = {
     width: '100%',
     padding: '13px 12px',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '10px',
     background: 'transparent',
     color: '#ddd',
     fontSize: '14px',
     textAlign: 'left',
     cursor: 'pointer',
+    transition: 'background 0.2s',
+  },
+  mobileNotificationLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '10px',
   },
   mobileNotificationBadge: {
     minWidth: '20px',
@@ -1006,9 +1377,11 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: '11px',
-    padding: '10px 8px',
+    padding: '10px 12px',
+    borderRadius: '10px',
     color: '#fff',
     textDecoration: 'none',
+    transition: 'background 0.2s',
   },
   mobileProfileInfo: {
     display: 'flex',
@@ -1029,13 +1402,14 @@ const s = {
     marginTop: '8px',
     padding: '13px 12px',
     border: '1px solid #2b2220',
-    borderRadius: '8px',
+    borderRadius: '10px',
     background: 'rgba(255, 107, 0, 0.05)',
     color: '#ff8a36',
     fontSize: '14px',
     fontWeight: '600',
     textAlign: 'left',
     cursor: 'pointer',
+    transition: 'background 0.2s',
   },
   mobileAuthButtons: {
     display: 'flex',
@@ -1045,7 +1419,7 @@ const s = {
   mobileLoginBtn: {
     padding: '12px',
     border: '1px solid #303030',
-    borderRadius: '8px',
+    borderRadius: '10px',
     color: '#ddd',
     fontSize: '14px',
     fontWeight: '600',
@@ -1058,7 +1432,7 @@ const s = {
     justifyContent: 'center',
     gap: '9px',
     padding: '12px',
-    borderRadius: '8px',
+    borderRadius: '10px',
     background: '#ff6b00',
     color: '#111',
     fontSize: '14px',

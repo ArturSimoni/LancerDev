@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 
 import api from '../services/api';
+import PixPaymentModal from './PixPaymentModal';
 
 const COLUMNS = [
   {
@@ -52,7 +53,7 @@ export default function KanbanBoard({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [moving, setMoving] = useState(null);
-  const [paying, setPaying] = useState(null);
+  const [pixTarget, setPixTarget] = useState(null);
   const [error, setError] = useState('');
 
   const loadData = useCallback(async (showLoading = true) => {
@@ -241,38 +242,16 @@ export default function KanbanBoard({
     }
   }
 
-  async function handlePayMilestone(milestoneId) {
-    setPaying(milestoneId);
+  function handlePayMilestone(milestoneId) {
     setError('');
+    setPixTarget(milestoneId);
+  }
 
-    try {
-      const response = await api.post('/payments/criar', {
-        projectId: Number(projectId),
-        milestoneId: Number(milestoneId)
-      });
+  async function handlePixClosed() {
+    setPixTarget(null);
 
-      const checkoutUrl =
-        response.data?.sandboxInitPoint ||
-        response.data?.initPoint;
-
-      if (!checkoutUrl) {
-        throw new Error(
-          'O Mercado Pago não retornou o endereço de pagamento.'
-        );
-      }
-
-      window.location.href = checkoutUrl;
-    } catch (err) {
-      console.error('Erro ao iniciar pagamento:', err);
-
-      setError(
-        err.response?.data?.message ||
-        err.message ||
-        'Não foi possível iniciar o pagamento.'
-      );
-
-      setPaying(null);
-    }
+    await loadData(false);
+    await onMilestoneUpdated?.({});
   }
 
   function renderPaymentArea(item) {
@@ -288,7 +267,9 @@ export default function KanbanBoard({
           </div>
 
           <p style={s.paidText}>
-            Este marco foi pago pelo cliente.
+            {isFreelancer && payment?.payoutStatus === 'released'
+              ? 'Pagamento recebido. Repasse simulado enviado para a sua chave Pix cadastrada.'
+              : 'Este marco foi pago pelo cliente.'}
           </p>
         </div>
       );
@@ -303,8 +284,18 @@ export default function KanbanBoard({
           </div>
 
           <p style={s.pendingPaymentText}>
-            Aguarde a confirmação do Mercado Pago.
+            Aguardando a confirmação do pagamento Pix.
           </p>
+
+          {!isFreelancer && (
+            <button
+              type="button"
+              onClick={() => handlePayMilestone(item.id)}
+              style={s.viewPixButton}
+            >
+              Ver QR Code Pix
+            </button>
+          )}
         </div>
       );
     }
@@ -361,16 +352,10 @@ export default function KanbanBoard({
 
         <button
           type="button"
-          disabled={paying === item.id}
           onClick={() => handlePayMilestone(item.id)}
-          style={{
-            ...s.payButton,
-            opacity: paying === item.id ? 0.6 : 1
-          }}
+          style={s.payButton}
         >
-          {paying === item.id
-            ? 'Abrindo Mercado Pago...'
-            : 'Pagar este marco'}
+          Pagar com Pix
         </button>
       </div>
     );
@@ -445,11 +430,11 @@ export default function KanbanBoard({
         <button
           type="button"
           onClick={() => loadData(false)}
-          disabled={refreshing || moving !== null || paying !== null}
+          disabled={refreshing || moving !== null}
           style={{
             ...s.refreshButton,
             opacity:
-              refreshing || moving !== null || paying !== null
+              refreshing || moving !== null
                 ? 0.6
                 : 1
           }}
@@ -831,6 +816,14 @@ export default function KanbanBoard({
           );
         })}
       </div>
+
+      {pixTarget !== null && (
+        <PixPaymentModal
+          projectId={projectId}
+          milestoneId={pixTarget}
+          onClose={handlePixClosed}
+        />
+      )}
     </section>
   );
 }
@@ -1405,6 +1398,19 @@ const s = {
     margin: '7px 0 0',
     color: '#888',
     fontSize: '10px'
+  },
+
+  viewPixButton: {
+    width: '100%',
+    marginTop: '10px',
+    padding: '8px',
+    backgroundColor: '#ff6b00',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '5px',
+    cursor: 'pointer',
+    fontSize: '10px',
+    fontWeight: '700'
   },
 
   stateContainer: {
