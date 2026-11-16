@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { io } from 'socket.io-client';
 
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 
 
@@ -286,14 +287,7 @@ export default function Chat() {
           <div className="conversation-list">
 
             {loadingConversations ? (
-
-              <div className="sidebar-feedback">
-
-                <div className="loading-spinner" />
-
-                <span>Carregando conversas...</span>
-
-              </div>
+              <PageLoader variant="inline" label="Carregando conversas..." />
 
             ) : conversations.length === 0 ? (
 
@@ -468,14 +462,7 @@ export default function Chat() {
 
 
                 {loadingMessages ? (
-
-                  <div className="messages-loading">
-
-                    <div className="loading-spinner" />
-
-                    <span>Carregando mensagens...</span>
-
-                  </div>
+                  <PageLoader variant="inline" label="Carregando mensagens..." />
 
                 ) : messages.length === 0 ? (
 
@@ -616,11 +603,8 @@ export default function Chat() {
 
 
                 <div className="input-hint">
-
                   <span>↵</span>
-
-                  Pressione Enter para enviar
-
+                  Contatos externos (e-mail, telefone, links e perfis sociais) são ocultados automaticamente.
                 </div>
 
               </form>
@@ -1601,8 +1585,6 @@ export default function Chat() {
 
 
 
-        .messages-loading,
-
         .messages-empty {
 
           display: flex;
@@ -1618,16 +1600,6 @@ export default function Chat() {
           color: #818891;
 
           text-align: center;
-
-        }
-
-
-
-        .messages-loading {
-
-          gap: 12px;
-
-          font-size: 12px;
 
         }
 
@@ -2116,36 +2088,6 @@ export default function Chat() {
         .welcome-tip span {
 
           color: #ff914d;
-
-        }
-
-
-
-        .loading-spinner {
-
-          width: 19px;
-
-          height: 19px;
-
-          border: 2px solid #393d42;
-
-          border-top-color: #ff812d;
-
-          border-radius: 50%;
-
-          animation: chat-spin 0.7s linear infinite;
-
-        }
-
-
-
-        @keyframes chat-spin {
-
-          to {
-
-            transform: rotate(360deg);
-
-          }
 
         }
 

@@ -40,7 +40,7 @@ export default function Login() {
   });
 
   return (
-    <div style={s.page}>
+    <div className="lancer-auth-page" style={s.page}>
       <div style={s.backgroundGlow} />
 
       <main style={s.card} className="lancer-login-card">

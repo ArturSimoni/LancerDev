@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 const howItWorks = [
   {
@@ -218,16 +219,13 @@ export default function Home() {
             </p>
           </div>
 
-          <Link to="/buscar-projetos" className="home-see-all">
+          <Link to="/projetos" className="home-see-all">
             Explorar projetos <span>→</span>
           </Link>
         </div>
 
         {loading ? (
-          <div className="home-state-card">
-            <div className="home-spinner" />
-            <p>Carregando oportunidades...</p>
-          </div>
+          <PageLoader variant="inline" label="Carregando oportunidades..." />
         ) : projects.length === 0 ? (
           <div className="home-state-card">
             <div className="home-state-icon">⌕</div>
@@ -1005,19 +1003,6 @@ const styles = `
     background: rgba(255, 107, 0, .1);
     color: #ff8739;
     font-size: 27px;
-  }
-
-  .home-spinner {
-    width: 34px;
-    height: 34px;
-    border: 3px solid #292929;
-    border-top-color: #ff6b00;
-    border-radius: 50%;
-    animation: home-spin .8s linear infinite;
-  }
-
-  @keyframes home-spin {
-    to { transform: rotate(360deg); }
   }
 
   .home-cta {

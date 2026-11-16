@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 export default function DetalhesProjeto() {
   const { id } = useParams();
@@ -138,7 +139,7 @@ export default function DetalhesProjeto() {
   }
 
   if (loading) {
-    return <div style={s.page}>Carregando projeto...</div>;
+    return <PageLoader label="Carregando projeto..." />;
   }
 
   if (!project) {
@@ -149,16 +150,34 @@ export default function DetalhesProjeto() {
     isFreelancer && !isProjectOwner;
 
   return (
-    <div style={s.page}>
-      <div style={s.header}>
+    <div className="project-details-page" style={s.page}>
+      <div className="project-details-header" style={s.header}>
         <h1 style={s.title}>{project.title}</h1>
         <span style={s.budget}>
           Orçamento: R$ {Number(project.budget).toLocaleString('pt-BR')}
         </span>
       </div>
 
-      <div style={s.content}>
-        <section style={s.card}>
+      <div className="project-details-content" style={s.content}>
+        {canShowProposalSection && project.clientId && (
+          <div className="project-client-summary">
+            <div className="project-client-avatar" aria-hidden="true">
+              {(project.client?.name || 'C').charAt(0).toUpperCase()}
+            </div>
+            <div className="project-client-info">
+              <span>Publicado por</span>
+              <strong>{project.client?.name || 'Cliente'}</strong>
+            </div>
+            <Link
+              className="project-client-link"
+              to={`/perfil/${project.clientId}`}
+            >
+              Ver perfil do cliente <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+        )}
+
+        <section className="project-details-card" style={s.card}>
           <h2 style={s.sectionTitle}>Descrição do Projeto</h2>
           <p style={s.desc}>{project.description}</p>
 
@@ -168,10 +187,10 @@ export default function DetalhesProjeto() {
         </section>
 
         {canShowProposalSection && (
-          <section style={s.card}>
+          <section className="project-details-card project-application-card" style={s.card}>
             {checkingProposal ? (
               <div style={s.infoBox}>
-                Verificando suas propostas...
+                <PageLoader variant="inline" label="Verificando suas propostas..." />
               </div>
             ) : hasSubmittedProposal ? (
               <div style={s.alreadySubmittedBox}>

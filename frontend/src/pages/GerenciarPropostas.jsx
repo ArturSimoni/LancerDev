@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 export default function GerenciarPropostas() {
   const { projectId } = useParams();
@@ -109,11 +110,7 @@ export default function GerenciarPropostas() {
 
 
   if (loading) {
-    return (
-      <p style={{ color: '#aaa' }}>
-        Carregando propostas...
-      </p>
-    );
+    return <PageLoader label="Carregando propostas..." />;
   }
 
 

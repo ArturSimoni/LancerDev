@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 export default function Perfil() {
   const { id } = useParams();
@@ -126,14 +127,7 @@ export default function Perfil() {
     : null;
 
   if (loading) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.feedback}>
-          <div style={styles.spinner} />
-          <p style={styles.feedbackText}>Carregando perfil...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader label="Carregando perfil..." />;
   }
 
   if (!data) {
@@ -1067,28 +1061,6 @@ const styles = {
   stars: {
     fontSize: '12px',
     whiteSpace: 'nowrap'
-  },
-
-  feedback: {
-    minHeight: '50vh',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: '12px'
-  },
-
-  spinner: {
-    width: '32px',
-    height: '32px',
-    border: '3px solid #333',
-    borderTop: '3px solid #ff6b00',
-    borderRadius: '50%'
-  },
-
-  feedbackText: {
-    color: '#aaa',
-    fontSize: '14px'
   },
 
   emptyState: {

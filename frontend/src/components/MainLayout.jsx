@@ -1,14 +1,24 @@
-import { Outlet } from 'react-router-dom';
+import { Suspense } from 'react';
+import { Outlet, useNavigation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Footer from './Footer';
+import PageLoader from './PageLoader';
 
 export default function MainLayout() {
+  const navigation = useNavigation();
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+    <div className="app-shell">
       <Navbar />
-      <main style={{ flex: 1, maxWidth: '1200px', width: '100%', margin: '0 auto', padding: '40px 20px' }}>
-        <Outlet /> {/* Aqui o React Router vai renderizar a página correspondente à URL */}
-      </main>
+      <div className="app-content" aria-busy={navigation.state === 'loading'}>
+        {navigation.state === 'loading' ? (
+          <PageLoader />
+        ) : (
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
+        )}
+      </div>
       <Footer />
     </div>
   );

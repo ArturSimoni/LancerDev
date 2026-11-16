@@ -1,30 +1,17 @@
+import { Link } from 'react-router-dom';
+
 export default function Footer() {
   return (
-    <footer style={styles.footer}>
-      <div style={styles.container}>
-        <p>&copy; {new Date().getFullYear()} LancerDev. Todos os direitos reservados.</p>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '14px' }}>
-          Plataforma desenvolvida para Freelancers & Clientes de Software.
-        </p>
+    <footer className="site-footer">
+      <div className="site-footer-inner">
+        <Link className="site-footer-brand" to="/">
+          Lancer<span>Dev</span>
+        </Link>
+        <div className="site-footer-copy">
+          <p>&copy; {new Date().getFullYear()} LancerDev. Todos os direitos reservados.</p>
+          <p>Feito para freelancers e clientes de tecnologia.</p>
+        </div>
       </div>
     </footer>
   );
 }
-
-const styles = {
-  footer: {
-    backgroundColor: '#0a0a0a',
-    padding: '20px 0',
-    marginTop: 'auto', 
-    borderTop: '1px solid #222',
-    textAlign: 'center',
-  },
-  container: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '0 20px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '5px',
-  }
-};

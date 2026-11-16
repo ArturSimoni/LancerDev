@@ -1,5 +1,6 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
+import PageLoader from './PageLoader';
 
 const API_URL = 'http://localhost:3000';
 
@@ -462,7 +463,9 @@ export default function Navbar() {
 
         <div style={s.notificationList}>
           {notificationsLoading && notifications.length === 0 ? (
-            <div style={s.notificationEmpty}>Carregando notificações...</div>
+            <div style={s.notificationEmpty}>
+              <PageLoader variant="inline" label="Carregando notificações..." />
+            </div>
           ) : notifications.length === 0 ? (
             <div style={s.notificationEmpty}>
               <span style={s.emptyBell}>

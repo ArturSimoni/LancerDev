@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../config/database');
 const authMiddleware = require('../middlewares/auth');
+const sanitizeContactInfo = require('../utils/sanitizeContactInfo');
 
 router.get('/conversations', authMiddleware, async (req, res, next) => {
   try {
@@ -50,7 +51,12 @@ router.get('/messages/:chatId', authMiddleware, async (req, res, next) => {
       orderBy: { createdAt: 'asc' }
     });
 
-    return res.json(messages);
+    return res.json(
+      messages.map(message => ({
+        ...message,
+        text: sanitizeContactInfo(message.text)
+      }))
+    );
   } catch (error) { next(error); }
 });
 

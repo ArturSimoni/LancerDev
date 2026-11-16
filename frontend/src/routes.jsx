@@ -1,5 +1,5 @@
-import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
-import Navbar from "./components/Navbar";
+import { createBrowserRouter, Navigate } from "react-router-dom";
+import MainLayout from "./components/MainLayout";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
@@ -24,17 +24,10 @@ const ProtectedRoute = ({ children, isPrivate }) => {
   return children;
 };
 
-const Layout = () => (
-  <>
-    <Navbar />
-    <main><Outlet /></main>
-  </>
-);
-
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <Layout />,
+    element: <MainLayout />,
     children: [
       { index: true, element: <Home /> },
       { path: "login", element: <ProtectedRoute isPrivate={false}><Login /></ProtectedRoute> },

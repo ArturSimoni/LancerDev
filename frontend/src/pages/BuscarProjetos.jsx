@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 export default function BuscarProjetos() {
   const { id } = useParams();
@@ -117,13 +118,7 @@ export default function BuscarProjetos() {
   };
 
   if (loading) {
-    return (
-      <div className="buscar-loading">
-        <div className="buscar-spinner" />
-        <p>Carregando projetos...</p>
-        <style>{styles}</style>
-      </div>
-    );
+    return <PageLoader label="Carregando projetos..." />;
   }
 
   if (!id) {
@@ -179,6 +174,20 @@ export default function BuscarProjetos() {
                   {projectItem.description || 'O cliente ainda não adicionou uma descrição.'}
                 </p>
 
+                <div className="buscar-client-row">
+                  <span>
+                    Publicado por <strong>{projectItem.client?.name || 'Cliente'}</strong>
+                  </span>
+                  {projectItem.clientId && (
+                    <Link
+                      to={`/perfil/${projectItem.clientId}`}
+                      className="buscar-client-link"
+                    >
+                      Ver perfil <span aria-hidden="true">→</span>
+                    </Link>
+                  )}
+                </div>
+
                 <div className="buscar-card-divider" />
 
                 <div className="buscar-card-bottom">
@@ -210,7 +219,7 @@ export default function BuscarProjetos() {
           <div className="buscar-empty-icon">!</div>
           <h3>Projeto não encontrado</h3>
           <p>Este projeto pode ter sido removido ou não está mais disponível.</p>
-          <Link to="/buscar-projetos" className="buscar-view-button">
+          <Link to="/projetos" className="buscar-view-button">
             Voltar aos projetos
           </Link>
         </section>
@@ -229,7 +238,7 @@ export default function BuscarProjetos() {
       <div className="proposal-layout">
         <section className="proposal-main">
           <div className="proposal-breadcrumb">
-            <Link to="/buscar-projetos">Projetos disponíveis</Link>
+            <Link to="/projetos">Projetos disponíveis</Link>
             <span>/</span>
             <span>Enviar proposta</span>
           </div>
@@ -382,7 +391,7 @@ export default function BuscarProjetos() {
             </section>
 
             <div className="proposal-actions">
-              <Link to="/buscar-projetos" className="proposal-cancel-button">
+              <Link to="/projetos" className="proposal-cancel-button">
                 Cancelar
               </Link>
 
@@ -447,30 +456,6 @@ const styles = `
     margin: 0 auto;
     padding: 48px 0 70px;
     color: #f5f5f5;
-  }
-
-  .buscar-loading {
-    min-height: 60vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    color: #aaa;
-    background: #090909;
-  }
-
-  .buscar-spinner {
-    width: 38px;
-    height: 38px;
-    border: 3px solid #292929;
-    border-top-color: #ff6b00;
-    border-radius: 50%;
-    animation: buscar-spin .8s linear infinite;
-  }
-
-  @keyframes buscar-spin {
-    to { transform: rotate(360deg); }
   }
 
   .buscar-header {

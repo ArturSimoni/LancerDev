@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 
 import api from '../services/api';
 import PixPaymentModal from './PixPaymentModal';
+import PageLoader from './PageLoader';
 
 const COLUMNS = [
   {
@@ -362,14 +363,7 @@ export default function KanbanBoard({
   }
 
   if (loading) {
-    return (
-      <div style={s.stateContainer}>
-        <div style={s.loader} />
-        <p style={s.stateText}>
-          Carregando quadro de etapas...
-        </p>
-      </div>
-    );
+    return <PageLoader variant="inline" label="Carregando quadro de etapas..." />;
   }
 
   if (error && milestones.length === 0) {
@@ -415,7 +409,7 @@ export default function KanbanBoard({
   }
 
   return (
-    <section style={s.wrapper}>
+    <section className="kanban-board" style={s.wrapper}>
       <div style={s.topBar}>
         <div>
           <h3 style={s.boardTitle}>
@@ -457,8 +451,8 @@ export default function KanbanBoard({
         </div>
       )}
 
-      <div style={s.summary}>
-        <div style={s.summaryMain}>
+      <div className="kanban-summary" style={s.summary}>
+        <div className="kanban-summary-progress" style={s.summaryMain}>
           <div style={s.summaryNumbers}>
             <span style={s.summaryLabel}>
               Progresso geral
@@ -483,7 +477,7 @@ export default function KanbanBoard({
           </span>
         </div>
 
-        <div style={s.summaryMetric}>
+        <div className="kanban-summary-metric" style={s.summaryMetric}>
           <span style={s.metricLabel}>
             Em revisão
           </span>
@@ -493,7 +487,7 @@ export default function KanbanBoard({
           </strong>
         </div>
 
-        <div style={s.summaryMetric}>
+        <div className="kanban-summary-metric" style={s.summaryMetric}>
           <span style={s.metricLabel}>
             Valor total
           </span>
@@ -503,7 +497,7 @@ export default function KanbanBoard({
           </strong>
         </div>
 
-        <div style={s.summaryMetric}>
+        <div className="kanban-summary-metric" style={s.summaryMetric}>
           <span style={s.metricLabel}>
             Pago
           </span>
@@ -551,7 +545,7 @@ export default function KanbanBoard({
         </div>
       )}
 
-      <div style={s.board}>
+      <div className="kanban-grid" style={s.board}>
         {COLUMNS.map(column => {
           const cards = milestones.filter(
             item => item.status === column.id
@@ -560,6 +554,7 @@ export default function KanbanBoard({
           return (
             <div
               key={column.id}
+              className="kanban-column"
               style={s.column}
             >
               <div style={s.columnHeader}>
@@ -603,6 +598,7 @@ export default function KanbanBoard({
                   return (
                     <article
                       key={item.id}
+                      className="kanban-card"
                       style={s.card}
                     >
                       <div style={s.cardTop}>
@@ -1411,27 +1407,6 @@ const s = {
     cursor: 'pointer',
     fontSize: '10px',
     fontWeight: '700'
-  },
-
-  stateContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '11px',
-    minHeight: '150px',
-    color: '#aaa'
-  },
-
-  loader: {
-    width: '17px',
-    height: '17px',
-    border: '2px solid #444',
-    borderTopColor: '#ff6b00',
-    borderRadius: '50%'
-  },
-
-  stateText: {
-    fontSize: '13px'
   },
 
   errorBox: {

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 export default function VerPropostas() {
   const { projectId } = useParams();
@@ -182,13 +183,7 @@ export default function VerPropostas() {
   }
 
   if (loading) {
-    return (
-      <div style={styles.container}>
-        <p style={{ color: '#aaa' }}>
-          Carregando propostas...
-        </p>
-      </div>
-    );
+    return <PageLoader label="Carregando propostas..." />;
   }
 
   const acceptedProposal = proposals.find(
@@ -206,7 +201,7 @@ export default function VerPropostas() {
 
       {acceptedProposal && loadingPayment && (
         <div style={styles.paymentChecking}>
-          Verificando status do pagamento...
+          <PageLoader variant="inline" label="Verificando status do pagamento..." />
         </div>
       )}
 

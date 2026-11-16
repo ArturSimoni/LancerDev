@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 export default function MeusAnuncios() {
   const navigate = useNavigate();
@@ -128,10 +129,7 @@ export default function MeusAnuncios() {
         </header>
 
         {loading ? (
-          <div className="my-projects-loading">
-            <div className="my-projects-spinner" />
-            <p>Carregando seus anúncios...</p>
-          </div>
+          <PageLoader variant="inline" label="Carregando seus anúncios..." />
         ) : projects.length === 0 ? (
           <section className="my-projects-empty">
             <div className="my-projects-empty-icon">▤</div>
@@ -603,7 +601,6 @@ const styles = `
     opacity: .6;
   }
 
-  .my-projects-loading,
   .my-projects-empty {
     display: flex;
     flex-direction: column;
@@ -615,24 +612,6 @@ const styles = `
     border-radius: 15px;
     background: #111;
     text-align: center;
-  }
-
-  .my-projects-loading {
-    gap: 14px;
-    color: #999;
-  }
-
-  .my-projects-spinner {
-    width: 36px;
-    height: 36px;
-    border: 3px solid #292929;
-    border-top-color: #ff6b00;
-    border-radius: 50%;
-    animation: my-projects-spin .8s linear infinite;
-  }
-
-  @keyframes my-projects-spin {
-    to { transform: rotate(360deg); }
   }
 
   .my-projects-empty-icon {

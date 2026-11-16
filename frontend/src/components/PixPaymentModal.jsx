@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 
 import api from '../services/api';
+import PageLoader from './PageLoader';
 
 function formatCurrency(value) {
   return Number(value || 0).toLocaleString('pt-BR', {
@@ -136,9 +137,7 @@ export default function PixPaymentModal({
         </h2>
 
         {phase === 'loading' && (
-          <p style={s.text}>
-            Gerando código Pix...
-          </p>
+          <PageLoader variant="inline" label="Gerando código Pix..." />
         )}
 
         {phase === 'error' && (

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import KanbanBoard from '../components/KanbanBoard';
 import PixPaymentModal from '../components/PixPaymentModal';
+import PageLoader from '../components/PageLoader';
 
 function isMilestoneCompleted(status) {
   return [
@@ -570,11 +571,7 @@ export default function Dashboard() {
   }
 
   if (loading) {
-    return (
-      <div style={styles.loading}>
-        Carregando painel...
-      </div>
-    );
+    return <PageLoader label="Carregando painel..." />;
   }
 
   const selectedPaymentData =
@@ -607,8 +604,8 @@ export default function Dashboard() {
       'paid';
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
+    <div className="dashboard-page" style={styles.container}>
+      <div className="dashboard-header" style={styles.header}>
         <div>
           <h1 style={styles.title}>
             Painel de Controle
@@ -622,7 +619,7 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div style={styles.badge}>
+        <div className="dashboard-role-badge" style={styles.badge}>
           Perfil:{' '}
           <strong
             style={{
@@ -637,7 +634,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div style={styles.actions}>
+      <div className="dashboard-actions" style={styles.actions}>
         {role === 'freelancer' ? (
           <>
             <button
@@ -704,7 +701,7 @@ export default function Dashboard() {
       </div>
 
       {role === 'freelancer' && (
-        <div style={styles.mpSection}>
+        <div className="dashboard-pix-card" style={styles.mpSection}>
           <div style={styles.mpInfo}>
             <div>
               <h2 style={styles.mpTitle}>
@@ -833,8 +830,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div style={styles.kanbanSection}>
-        <h2 style={styles.sectionTitle}>
+      <div className="dashboard-project-card" style={styles.kanbanSection}>
+        <h2 className="dashboard-section-title" style={styles.sectionTitle}>
           Projetos em Andamento
         </h2>
 
@@ -853,7 +850,7 @@ export default function Dashboard() {
         ) : (
           <>
             {activeProjects.length > 1 && (
-              <div style={styles.projectTabs}>
+              <div className="dashboard-project-tabs" style={styles.projectTabs}>
                 {activeProjects.map(
                   project => (
                     <button
@@ -876,6 +873,7 @@ export default function Dashboard() {
                             ? '#ff6b00'
                             : '#aaa'
                       }}
+                      className="dashboard-project-tab"
                     >
                       {project.title}
                     </button>
@@ -887,6 +885,7 @@ export default function Dashboard() {
             {selectedProject && (
               <>
                 <div
+                  className="dashboard-active-project"
                   style={
                     styles.projectHeader
                   }
@@ -982,6 +981,7 @@ export default function Dashboard() {
                   </div>
                 ) : selectedCurrentMilestone ? (
                   <div
+                    className="dashboard-milestone-card"
                     style={
                       styles.milestoneCard
                     }
@@ -1257,12 +1257,13 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div style={styles.historySection}>
+      <div className="dashboard-history-card" style={styles.historySection}>
         <div
           style={styles.historyHeader}
         >
           <div>
             <h2
+              className="dashboard-section-title"
               style={
                 styles.sectionTitle
               }
@@ -1334,6 +1335,7 @@ export default function Dashboard() {
                 return (
                   <div
                     key={project.id}
+                    className="dashboard-history-item"
                     style={
                       styles.historyCard
                     }
@@ -1539,14 +1541,6 @@ const styles = {
     margin: '40px auto',
     padding: '0 20px',
     color: '#fff'
-  },
-
-  loading: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    height: '50vh',
-    color: '#aaa'
   },
 
   header: {

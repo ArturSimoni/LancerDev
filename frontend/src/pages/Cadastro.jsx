@@ -39,7 +39,7 @@ export default function Cadastro() {
   });
 
   return (
-    <div style={s.page}>
+    <div className="lancer-auth-page" style={s.page}>
       <div style={s.backgroundGlow} />
 
       <main style={s.card} className="lancer-register-card">

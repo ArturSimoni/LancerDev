@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
+import PageLoader from '../components/PageLoader';
 
 export default function MinhasPropostas() {
     const [proposals, setProposals] = useState([]);
@@ -63,7 +64,7 @@ export default function MinhasPropostas() {
     };
 
     if (loading) {
-        return <div style={s.page}>Carregando propostas...</div>;
+        return <PageLoader label="Carregando propostas..." />;
     }
 
     return (
